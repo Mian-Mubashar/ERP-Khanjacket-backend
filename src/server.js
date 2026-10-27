@@ -1,7 +1,7 @@
 const app = require('./app');
 const config = require('./config/env');
 const { sequelize, testConnection } = require('./config/database');
-const { runUp } = require('./migrations/runner');
+const { runUp } = require('./utils/migrationRunner');
 const seedDatabase = require('./seeders/initialSeeder');
 const logger = require('./utils/logger');
 

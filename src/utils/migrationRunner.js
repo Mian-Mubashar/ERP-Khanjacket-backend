@@ -2,9 +2,11 @@ const fs = require('fs');
 const path = require('path');
 const { DataTypes } = require('sequelize');
 const { sequelize, testConnection } = require('../config/database');
-const logger = require('../utils/logger');
+const logger = require('./logger');
 
 const META_TABLE = 'SequelizeMeta';
+
+const getMigrationsDir = () => path.resolve(__dirname, '../migrations');
 
 /**
  * Ensure the SequelizeMeta table exists to track executed migrations
@@ -41,10 +43,10 @@ const getExecutedMigrations = async (queryInterface) => {
  * Get all migration files from the migrations folder
  */
 const getMigrationFiles = () => {
-  const migrationsDir = __dirname;
+  const migrationsDir = getMigrationsDir();
   return fs
     .readdirSync(migrationsDir)
-    .filter(file => file.endsWith('.js') && file !== 'runner.js')
+    .filter(file => file.endsWith('.js') && !file.includes('runner'))
     .sort();
 };
 
@@ -65,9 +67,10 @@ const runUp = async () => {
 
   console.log(`[Migrations] Found ${pending.length} pending migration(s)...`);
 
+  const migrationsDir = getMigrationsDir();
   for (const file of pending) {
     console.log(`⏳ Migrating: ${file}...`);
-    const migration = require(path.join(__dirname, file));
+    const migration = require(path.join(migrationsDir, file));
     const startTime = Date.now();
 
     await migration.up(queryInterface, sequelize.Sequelize);
@@ -96,7 +99,8 @@ const runDown = async () => {
 
   const lastFile = executed[executed.length - 1];
   console.log(`⏳ Reverting: ${lastFile}...`);
-  const migration = require(path.join(__dirname, lastFile));
+  const migrationsDir = getMigrationsDir();
+  const migration = require(path.join(migrationsDir, lastFile));
   const startTime = Date.now();
 
   await migration.down(queryInterface, sequelize.Sequelize);
@@ -122,10 +126,11 @@ const runReset = async () => {
 
   console.log(`⏳ Reverting all ${executed.length} migration(s)...`);
   const reversed = [...executed].reverse();
+  const migrationsDir = getMigrationsDir();
 
   for (const file of reversed) {
     console.log(`⏳ Reverting: ${file}...`);
-    const migration = require(path.join(__dirname, file));
+    const migration = require(path.join(migrationsDir, file));
     await migration.down(queryInterface, sequelize.Sequelize);
     await queryInterface.delete(null, META_TABLE, { name: file });
     console.log(`✔ Reverted:  ${file}`);

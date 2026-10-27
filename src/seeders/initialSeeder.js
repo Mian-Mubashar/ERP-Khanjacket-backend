@@ -212,4 +212,7 @@ if (require.main === module) {
   })();
 }
 
+seedDatabase.up = async () => seedDatabase();
+seedDatabase.down = async () => {};
+
 module.exports = seedDatabase;
