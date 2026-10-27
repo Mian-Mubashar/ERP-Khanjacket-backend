@@ -20,19 +20,52 @@ app.use(helmet({
 app.use(compression());
 
 // 3. Cross-Origin Resource Sharing (CORS)
-app.use(cors({
+const allowedOrigins = [
+  'https://khanjackethouse.com',
+  'https://www.khanjackethouse.com',
+  'http://khanjackethouse.com',
+  'http://www.khanjackethouse.com',
+  'https://api.khanjackethouse.com',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:5000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000'
+];
+
+if (Array.isArray(config.cors?.origin)) {
+  config.cors.origin.forEach(o => {
+    if (o && o !== '*' && !allowedOrigins.includes(o)) {
+      allowedOrigins.push(o);
+    }
+  });
+}
+
+const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, postman)
     if (!origin) return callback(null, true);
-    if (config.cors.origin.includes('*') || config.cors.origin.includes(origin)) {
+
+    const isAllowed =
+      config.cors?.origin?.includes('*') ||
+      allowedOrigins.includes(origin) ||
+      origin.endsWith('.khanjackethouse.com') ||
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1');
+
+    if (isAllowed) {
       return callback(null, true);
     }
-    return callback(new Error(`CORS blocked request from origin: ${origin}`));
+    return callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
+
 
 // 4. Request Body Parsers
 app.use(express.json({ limit: '10mb' }));

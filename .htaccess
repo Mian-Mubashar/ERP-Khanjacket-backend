@@ -1,0 +1,15 @@
+# ==============================================================================
+# Hostinger LiteSpeed / Apache CORS & Reverse Proxy Configuration
+# ==============================================================================
+
+<IfModule mod_headers.c>
+  Header always set Access-Control-Allow-Origin "https://khanjackethouse.com"
+  Header always set Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+  Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, Origin"
+  Header always set Access-Control-Allow-Credentials "true"
+</IfModule>
+
+# Handle Preflight OPTIONS requests cleanly with 204
+RewriteEngine On
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^(.*)$ $1 [R=204,L]

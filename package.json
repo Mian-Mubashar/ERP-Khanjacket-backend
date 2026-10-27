@@ -2,7 +2,7 @@
   "name": "khan-clothes-warehouse-backend",
   "version": "1.0.0",
   "description": "Production-grade, secure Node.js + Express + Sequelize SQL Backend for Khan Clothes Warehouse & Inventory System with Granular RBAC Permissions and Migrations",
-  "main": "src/server.js",
+  "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",

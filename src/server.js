@@ -11,17 +11,8 @@ const startServer = async () => {
   try {
     logger.info('Starting Khan Clothes Warehouse Backend Server...');
 
-    // 1. Verify Database Connection
-    await testConnection();
-
-    // 2. Execute Pending Migrations (Ensures DB schema is 100% current)
-    await runUp();
-
-    // 3. Seed Initial Master Data if empty
-    await seedDatabase();
-
-    // 4. Start HTTP Server
-    server = app.listen(config.port, () => {
+    // 1. Start HTTP Server immediately so Hostinger LiteSpeed reverse proxy never returns 503
+    server = app.listen(config.port, async () => {
       console.log('================================================================');
       console.log(`🚀 KHAN CLOTHES WAREHOUSE BACKEND RUNNING SUCCESSFULLY`);
       console.log(`📡 Port:        ${config.port}`);
@@ -30,6 +21,19 @@ const startServer = async () => {
       console.log(`🔗 API Base:    http://localhost:${config.port}${config.apiPrefix}`);
       console.log(`🩺 Health:      http://localhost:${config.port}${config.apiPrefix}/health`);
       console.log('================================================================');
+
+      try {
+        // 2. Verify Database Connection
+        await testConnection();
+
+        // 3. Execute Pending Migrations (Ensures DB schema is 100% current)
+        await runUp();
+
+        // 4. Seed Initial Master Data if empty
+        await seedDatabase();
+      } catch (dbError) {
+        logger.error('[Database Initialization Error]:', dbError.message);
+      }
     });
 
   } catch (error) {

@@ -7,7 +7,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 const config = {
   env: process.env.NODE_ENV || 'development',
   isProduction: process.env.NODE_ENV === 'production',
-  port: parseInt(process.env.PORT, 10) || 5000,
+  port: process.env.PORT || 5000,
   apiPrefix: process.env.API_PREFIX || '/api/v1',
 
   cors: {
