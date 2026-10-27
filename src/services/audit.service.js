@@ -11,8 +11,8 @@ class AuditService {
       const timePart = now.toTimeString().split(' ')[0].substring(0, 5);
       const timestamp = `${datePart} ${timePart}`;
 
-      const userName = user ? `${user.role} (${user.name})` : 'System';
-      const userRole = user ? user.role : 'System';
+      const userRole = (user && user.role) ? user.role : 'Admin';
+      const userName = user ? `${userRole} (${user.name || 'User'})` : 'System';
 
       const id = `AUD-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`;
 

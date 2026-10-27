@@ -70,12 +70,18 @@ class PurchaseService {
       const newId = `PUR-CN-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`;
       const purchaseDate = purchaseData.purchaseDate || new Date().toISOString().split('T')[0];
 
-      // 2. Create Purchase Record
+      // 2. Fetch and Validate Supplier exists in database
+      const supplier = await Supplier.findByPk(purchaseData.supplierId, { transaction: t });
+      if (!supplier) {
+        throw ApiError.badRequest(`Supplier with ID "${purchaseData.supplierId}" not found in database`);
+      }
+
+      // 3. Create Purchase Record
       const newPurchase = await Purchase.create({
         id: newId,
         invoiceNo: purchaseData.invoiceNo.trim(),
         supplierId: purchaseData.supplierId,
-        supplierName: purchaseData.supplierName.trim(),
+        supplierName: (supplier.company || purchaseData.supplierName).trim(),
         purchaseDate,
         containerNo: purchaseData.containerNo || 'N/A',
         itemsSubtotal,
@@ -88,7 +94,9 @@ class PurchaseService {
         notes: purchaseData.notes || ''
       }, { transaction: t });
 
-      // 3. Create Item Lines and Increment Article Stocks
+      // 4. Increment Article Stocks and Create Item Lines
+      // CRITICAL: Ensure Article exists in database BEFORE inserting into purchase_items
+      // to satisfy MySQL foreign key constraint (purchase_items.articleNo -> articles.articleNo)
       const itemSummaries = [];
       for (const it of purchaseData.items) {
         const articleNo = it.articleNo.toUpperCase().trim();
@@ -96,30 +104,20 @@ class PurchaseService {
         const unitCost = Number(it.unitCost);
         const total = quantity * unitCost;
 
-        await PurchaseItem.create({
-          purchaseId: newId,
-          articleNo,
-          articleName: it.articleName.trim(),
-          category: it.category.trim(),
-          quantity,
-          unitCost,
-          total
-        }, { transaction: t });
-
-        // Update Article stock and unit cost
+        // Ensure Article exists in database first
         const article = await Article.findByPk(articleNo, { transaction: t });
         if (article) {
           await article.update({
-            totalPurchased: article.totalPurchased + quantity,
-            currentStock: article.currentStock + quantity,
+            totalPurchased: Number(article.totalPurchased || 0) + quantity,
+            currentStock: Number(article.currentStock || 0) + quantity,
             unitCost: unitCost // Update with latest landing unit cost
           }, { transaction: t });
         } else {
-          // If article doesn't exist, create it automatically
+          // If article doesn't exist, create it automatically first
           await Article.create({
             articleNo,
             name: it.articleName.trim(),
-            category: it.category.trim(),
+            category: it.category?.trim() || 'Jacket',
             stuff: 'Parachute (Waterproof)',
             totalPurchased: quantity,
             totalOut: 0,
@@ -128,18 +126,26 @@ class PurchaseService {
           }, { transaction: t });
         }
 
+        // Now create PurchaseItem line safely
+        await PurchaseItem.create({
+          purchaseId: newId,
+          articleNo,
+          articleName: it.articleName.trim(),
+          category: it.category?.trim() || 'Jacket',
+          quantity,
+          unitCost,
+          total
+        }, { transaction: t });
+
         itemSummaries.push(`${articleNo} (${quantity} pcs)`);
       }
 
-      // 4. Update Supplier Balance
-      const supplier = await Supplier.findByPk(purchaseData.supplierId, { transaction: t });
-      if (supplier) {
-        await supplier.update({
-          totalPurchases: Number(supplier.totalPurchases) + totalBill,
-          totalPayments: Number(supplier.totalPayments) + paidAmount,
-          remainingBalance: Number(supplier.remainingBalance) + remainingAmount
-        }, { transaction: t });
-      }
+      // 5. Update Supplier Balance
+      await supplier.update({
+        totalPurchases: Number(supplier.totalPurchases || 0) + totalBill,
+        totalPayments: Number(supplier.totalPayments || 0) + paidAmount,
+        remainingBalance: Number(supplier.remainingBalance || 0) + remainingAmount
+      }, { transaction: t });
 
       // 5. If paidAmount > 0, record initial payment
       if (paidAmount > 0) {
