@@ -18,7 +18,7 @@ const config = {
   },
 
   db: {
-    dialect: process.env.DB_DIALECT || 'sqlite',
+    dialect: process.env.DB_DIALECT || 'mysql',
     storage: process.env.DB_STORAGE || path.resolve(__dirname, '../../data/warehouse.sqlite'),
     host: process.env.DB_HOST || '127.0.0.1',
     port: parseInt(process.env.DB_PORT, 10) || 3306,

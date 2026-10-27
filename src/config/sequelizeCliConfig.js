@@ -1,23 +1,24 @@
 const config = require('./env');
 
-const dbConfig = {
-  dialect: config.db.dialect,
-  logging: config.db.logging
+const mysqlConfig = {
+  dialect: 'mysql',
+  host: config.db.host || process.env.DB_HOST || '127.0.0.1',
+  port: parseInt(config.db.port || process.env.DB_PORT || 3306, 10),
+  database: config.db.name || process.env.DB_NAME,
+  username: config.db.user || process.env.DB_USER,
+  password: config.db.password || process.env.DB_PASSWORD || '',
+  logging: config.db.logging !== undefined ? config.db.logging : false,
+  pool: config.db.pool
 };
 
-if (config.db.dialect === 'sqlite') {
-  dbConfig.storage = config.db.storage;
-} else {
-  dbConfig.host = config.db.host;
-  dbConfig.port = config.db.port;
-  dbConfig.database = config.db.name;
-  dbConfig.username = config.db.user;
-  dbConfig.password = config.db.password;
-  dbConfig.pool = config.db.pool;
-}
-
 module.exports = {
-  development: dbConfig,
-  test: dbConfig,
-  production: dbConfig
+  development: {
+    ...mysqlConfig
+  },
+  test: {
+    ...mysqlConfig
+  },
+  production: {
+    ...mysqlConfig
+  }
 };
