@@ -16,6 +16,11 @@ const requirePermission = (permissionName) => {
       return next();
     }
 
+    // Staff allowed for articles delete
+    if (req.user.role === ROLES.STAFF && permissionName === 'articles:delete') {
+      return next();
+    }
+
     if (!req.user.permissions || !req.user.permissions.includes(permissionName)) {
       return next(
         ApiError.forbidden(

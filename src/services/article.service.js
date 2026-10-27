@@ -133,13 +133,26 @@ class ArticleService {
    * Delete article
    */
   static async deleteArticle(articleNo, currentUser) {
-    const article = await Article.findByPk(articleNo.toUpperCase());
+    const formattedCode = (articleNo || '').trim().toUpperCase();
+    const article = await Article.findByPk(formattedCode);
     if (!article) {
       throw ApiError.notFound(`Article "${articleNo}" not found`);
     }
 
-    if (article.currentStock > 0) {
-      throw ApiError.badRequest(`Cannot delete Article ${articleNo} with active stock (${article.currentStock} pcs available).`);
+    // Check if article is used in outward dispatches
+    const outwardCount = await Outward.count({ where: { articleNo: formattedCode } });
+    if (outwardCount > 0) {
+      throw ApiError.badRequest(
+        `Cannot delete Article "${formattedCode}" because it is linked to ${outwardCount} outward dispatch(es). Delete or adjust those outward bills first.`
+      );
+    }
+
+    // Check if article is used in China purchase bills
+    const purchaseCount = await PurchaseItem.count({ where: { articleNo: formattedCode } });
+    if (purchaseCount > 0) {
+      throw ApiError.badRequest(
+        `Cannot delete Article "${formattedCode}" because it is linked to ${purchaseCount} purchase record(s).`
+      );
     }
 
     await article.destroy();
@@ -147,12 +160,12 @@ class ArticleService {
     await AuditService.log({
       action: 'Article Deleted',
       category: 'Article Record',
-      details: `Deleted Article ${articleNo}`,
-      impact: 'Article removed from warehouse catalog',
+      details: `Deleted Article ${formattedCode} - ${article.name}`,
+      impact: `Stock of ${article.currentStock} pcs removed from warehouse catalog`,
       user: currentUser
     });
 
-    return { message: `Article ${articleNo} deleted successfully` };
+    return { message: `Article ${formattedCode} deleted successfully` };
   }
 }
 
