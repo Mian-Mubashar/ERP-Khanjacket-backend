@@ -24,7 +24,7 @@ class CustomerService {
 
     return await Customer.findAll({
       where,
-      order: [['createdAt', 'DESC']]
+      order: [['shopName', 'ASC']]
     });
   }
 
