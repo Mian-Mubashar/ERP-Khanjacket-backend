@@ -59,11 +59,11 @@ Supplier.hasMany(SupplierPayment, { foreignKey: 'supplierId', as: 'payments' });
 SupplierPayment.belongsTo(Supplier, { foreignKey: 'supplierId', as: 'supplier' });
 
 // Customer <-> CustomerPayment (1:N)
-Customer.hasMany(CustomerPayment, { foreignKey: 'customerId', as: 'payments' });
+Customer.hasMany(CustomerPayment, { foreignKey: 'customerId', as: 'payments', onDelete: 'CASCADE' });
 CustomerPayment.belongsTo(Customer, { foreignKey: 'customerId', as: 'customer' });
 
 // Customer <-> Outward (1:N optional)
-Customer.hasMany(Outward, { foreignKey: 'customerId', as: 'dispatches' });
+Customer.hasMany(Outward, { foreignKey: 'customerId', as: 'dispatches', onDelete: 'SET NULL' });
 Outward.belongsTo(Customer, { foreignKey: 'customerId', as: 'customer' });
 
 module.exports = {

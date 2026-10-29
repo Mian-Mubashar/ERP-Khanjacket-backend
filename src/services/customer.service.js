@@ -24,7 +24,7 @@ class CustomerService {
 
     return await Customer.findAll({
       where,
-      order: [['createdAt', 'ASC']]
+      order: [['createdAt', 'DESC']]
     });
   }
 
@@ -50,39 +50,61 @@ class CustomerService {
    * Create new wholesale customer
    */
   static async createCustomer(custData, currentUser) {
-    const count = await Customer.count();
-    const newId = `CUST-${String(count + 101)}`;
-    const opening = Number(custData.openingBalance) || 0;
-
-    const newCustomer = await Customer.create({
-      id: newId,
-      shopName: custData.shopName.trim(),
-      shopkeeperName: custData.shopkeeperName?.trim() || custData.shopName.trim(),
-      city: custData.city.trim(),
-      marketAddress: custData.marketAddress?.trim() || '',
-      phone: custData.phone?.trim() || '',
-      totalPiecesReceived: 0,
-      totalBill: opening,
-      totalPaid: 0,
-      remainingBalance: opening,
-      notes: custData.notes || ''
+    // Generate unique collision-proof customer ID
+    const customers = await Customer.findAll({ attributes: ['id'] });
+    let maxNum = 100;
+    customers.forEach(c => {
+      const match = String(c.id).match(/^CUST-(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
     });
-
-    // Increment City shops counter
-    const cityRecord = await City.findOne({ where: { name: newCustomer.city } });
-    if (cityRecord) {
-      await cityRecord.update({ totalShops: (cityRecord.totalShops || 0) + 1 });
+    let newId = `CUST-${maxNum + 1}`;
+    while (await Customer.findByPk(newId)) {
+      maxNum++;
+      newId = `CUST-${maxNum + 1}`;
     }
 
-    await AuditService.log({
-      action: 'Shopkeeper Registered',
-      category: 'Wholesale Customers',
-      details: `Added shop ${newCustomer.shopName} (${newCustomer.shopkeeperName}) in ${newCustomer.city}`,
-      impact: `Opening Khata Balance: Rs. ${opening.toLocaleString()}`,
-      user: currentUser
-    });
+    const opening = Number(custData.openingBalance) || 0;
 
-    return newCustomer;
+    const t = await sequelize.transaction();
+    try {
+      const newCustomer = await Customer.create({
+        id: newId,
+        shopName: custData.shopName.trim(),
+        shopkeeperName: custData.shopkeeperName?.trim() || custData.shopName.trim(),
+        city: custData.city.trim(),
+        marketAddress: custData.marketAddress?.trim() || '',
+        phone: custData.phone?.trim() || '',
+        totalPiecesReceived: 0,
+        totalBill: opening,
+        totalPaid: 0,
+        remainingBalance: opening,
+        notes: custData.notes?.trim() || ''
+      }, { transaction: t });
+
+      // Increment City shops counter
+      const cityRecord = await City.findOne({ where: { name: newCustomer.city }, transaction: t });
+      if (cityRecord) {
+        await cityRecord.update({ totalShops: (cityRecord.totalShops || 0) + 1 }, { transaction: t });
+      }
+
+      await AuditService.log({
+        action: 'Shopkeeper Registered',
+        category: 'Wholesale Customers',
+        details: `Added shop ${newCustomer.shopName} (${newCustomer.shopkeeperName}) in ${newCustomer.city}`,
+        impact: `Opening Khata Balance: Rs. ${opening.toLocaleString()}`,
+        user: currentUser,
+        transaction: t
+      });
+
+      await t.commit();
+      return newCustomer;
+    } catch (error) {
+      await t.rollback();
+      throw error;
+    }
   }
 
   /**
@@ -96,6 +118,21 @@ class CustomerService {
 
     const oldCity = customer.city;
     const oldShopName = customer.shopName;
+
+    // Recalculate opening balance & financial totals if opening balance is updated
+    if (data.openingBalance !== undefined && data.openingBalance !== null && data.openingBalance !== '') {
+      const newOpening = Math.max(0, Number(data.openingBalance) || 0);
+      const dispatches = await Outward.findAll({ where: { customerId: id } });
+      const payments = await CustomerPayment.findAll({ where: { customerId: id } });
+
+      const totalBilled = dispatches.reduce((s, d) => s + (Number(d.totalSaleAmount) || 0), 0);
+      const totalPaid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+
+      data.totalBill = totalBilled + newOpening;
+      data.totalPaid = totalPaid;
+      data.remainingBalance = data.totalBill - totalPaid;
+      delete data.openingBalance;
+    }
 
     await customer.update(data);
 
@@ -141,29 +178,50 @@ class CustomerService {
   }
 
   /**
-   * Delete customer
+   * Delete customer (Transactional with cascade of payments, outward unlinking, and city count update)
    */
   static async deleteCustomer(id, currentUser) {
-    const customer = await Customer.findByPk(id);
-    if (!customer) {
-      throw ApiError.notFound(`Customer "${id}" not found`);
+    const t = await sequelize.transaction();
+    try {
+      const customer = await Customer.findByPk(id, { transaction: t });
+      if (!customer) {
+        throw ApiError.notFound(`Customer "${id}" not found`);
+      }
+
+      // 1. Delete associated customer payment receipts
+      await CustomerPayment.destroy({ where: { customerId: id }, transaction: t });
+
+      // 2. Unlink outward dispatches so dispatch history isn't broken
+      await Outward.update({ customerId: null }, { where: { customerId: id }, transaction: t });
+
+      // 3. Decrement City shop count if applicable
+      if (customer.city) {
+        const cityRecord = await City.findOne({ where: { name: customer.city }, transaction: t });
+        if (cityRecord && cityRecord.totalShops > 0) {
+          await cityRecord.update({ totalShops: cityRecord.totalShops - 1 }, { transaction: t });
+        }
+      }
+
+      // 4. Delete the customer record
+      await customer.destroy({ transaction: t });
+
+      // 5. Audit Log
+      const prevBal = Number(customer.remainingBalance || 0);
+      await AuditService.log({
+        action: 'Customer Deleted',
+        category: 'Wholesale Customers',
+        details: `Deleted customer record ${id} (${customer.shopName})`,
+        impact: `Removed from khata registry. Unsettled balance was Rs. ${prevBal.toLocaleString()}`,
+        user: currentUser,
+        transaction: t
+      });
+
+      await t.commit();
+      return { message: `Customer ${id} deleted successfully` };
+    } catch (error) {
+      await t.rollback();
+      throw error;
     }
-
-    if (customer.remainingBalance !== 0) {
-      throw ApiError.badRequest(`Cannot delete customer with pending khata balance (Rs. ${customer.remainingBalance}). Clear balance first.`);
-    }
-
-    await customer.destroy();
-
-    await AuditService.log({
-      action: 'Customer Deleted',
-      category: 'Wholesale Customers',
-      details: `Deleted customer record ${id} (${customer.shopName})`,
-      impact: 'Removed from khata registry',
-      user: currentUser
-    });
-
-    return { message: `Customer ${id} deleted successfully` };
   }
 
   /**

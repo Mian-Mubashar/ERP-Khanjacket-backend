@@ -27,8 +27,20 @@ class DeviceService {
       );
     }
 
-    const count = await Device.count();
-    const newId = `DEV-${count + 1}`;
+    const devices = await Device.findAll({ attributes: ['id'] });
+    let maxNum = 0;
+    devices.forEach(d => {
+      const match = String(d.id).match(/^DEV-(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
+    });
+    let newId = `DEV-${maxNum + 1}`;
+    while (await Device.findByPk(newId)) {
+      maxNum++;
+      newId = `DEV-${maxNum + 1}`;
+    }
     const ipAddress = `182.180.${Math.floor(Math.random() * 200)}.${Math.floor(Math.random() * 200)}`;
 
     const newDevice = await Device.create({

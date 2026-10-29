@@ -1,4 +1,4 @@
-const { sequelize, Outward, Article, Customer, City } = require('../models');
+const { sequelize, Outward, Article, Customer, City, CustomerPayment } = require('../models');
 const ApiError = require('../utils/apiError');
 const AuditService = require('./audit.service');
 
@@ -41,20 +41,26 @@ class OutwardService {
       const articleNo = outwardData.articleNo.toUpperCase().trim();
       const reqQty = Number(outwardData.quantity);
 
-      // 1. Fetch Article & Check Stock
-      const article = await Article.findByPk(articleNo, { transaction: t });
+      // 1. Fetch Article or auto-register if missing (no strict stock blocking)
+      let article = await Article.findByPk(articleNo, { transaction: t });
       if (!article) {
-        throw ApiError.notFound(`Article "${articleNo}" not found in inventory.`);
-      }
-
-      if (article.currentStock < reqQty) {
-        throw ApiError.badRequest(
-          `Insufficient stock! Article ${article.articleNo} currently has only ${article.currentStock} pcs available (Requested: ${reqQty} pcs).`
-        );
+        article = await Article.create({
+          articleNo,
+          name: outwardData.articleName || `Garment ${articleNo}`,
+          category: outwardData.category || 'Outerwear',
+          stuff: outwardData.stuff || 'Standard',
+          unitCost: Number(outwardData.unitSalePrice) || 0,
+          unitSalePrice: Number(outwardData.unitSalePrice) || 0,
+          currentStock: 0,
+          totalPurchased: 0,
+          totalOut: 0,
+          status: 'Active'
+        }, { transaction: t });
       }
 
       const unitSalePrice = Number(outwardData.unitSalePrice) || 0;
       const totalSaleAmount = unitSalePrice * reqQty;
+      const paidAmount = Number(outwardData.paidAmount) || 0;
       const newId = `OUT-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`;
       const challanNo = outwardData.challanNo || `CH-${Date.now().toString().slice(-4)}`;
       const gatePassNo = outwardData.gatePassNo || `GP-${Date.now().toString().slice(-3)}`;
@@ -81,10 +87,10 @@ class OutwardService {
         notes: outwardData.notes || ''
       }, { transaction: t });
 
-      // 3. Decrement Inventory Stock & Increment TotalOut
+      // 3. Update Inventory Stock tracking
       await article.update({
-        totalOut: article.totalOut + reqQty,
-        currentStock: article.currentStock - reqQty
+        totalOut: (article.totalOut || 0) + reqQty,
+        currentStock: (article.currentStock || 0) - reqQty
       }, { transaction: t });
 
       // 4. Update Customer / Shopkeeper Khata (if customer matched)
@@ -99,10 +105,29 @@ class OutwardService {
       }
 
       if (customerRecord) {
+        // If upfront payment was made with this dispatch, record CustomerPayment receipt
+        if (paidAmount > 0) {
+          const newPayId = `CPAY-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`;
+          await CustomerPayment.create({
+            id: newPayId,
+            customerId: customerRecord.id,
+            customerName: `${customerRecord.shopName} (${customerRecord.shopkeeperName || ''})`,
+            city: customerRecord.city,
+            date,
+            amount: paidAmount,
+            paymentMethod: outwardData.paymentMethod || 'Cash Receipt',
+            refNo: `REC-${challanNo}`,
+            notes: `Cash received against Challan #${challanNo}`,
+            recordedBy: currentUser?.name || 'Staff'
+          }, { transaction: t });
+        }
+
+        const netBalanceAddition = totalSaleAmount - paidAmount;
         await customerRecord.update({
           totalPiecesReceived: (customerRecord.totalPiecesReceived || 0) + reqQty,
           totalBill: Number(customerRecord.totalBill || 0) + totalSaleAmount,
-          remainingBalance: Number(customerRecord.remainingBalance || 0) + totalSaleAmount
+          totalPaid: Number(customerRecord.totalPaid || 0) + paidAmount,
+          remainingBalance: Number(customerRecord.remainingBalance || 0) + netBalanceAddition
         }, { transaction: t });
       }
 

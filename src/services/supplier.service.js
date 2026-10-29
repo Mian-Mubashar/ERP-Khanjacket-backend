@@ -46,8 +46,20 @@ class SupplierService {
    * Create new supplier
    */
   static async createSupplier(supplierData, currentUser) {
-    const count = await Supplier.count();
-    const newId = `SUP-${String(count + 1).padStart(3, '0')}`;
+    const suppliers = await Supplier.findAll({ attributes: ['id'] });
+    let maxNum = 0;
+    suppliers.forEach(s => {
+      const match = String(s.id).match(/^SUP-(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
+    });
+    let newId = `SUP-${String(maxNum + 1).padStart(3, '0')}`;
+    while (await Supplier.findByPk(newId)) {
+      maxNum++;
+      newId = `SUP-${String(maxNum + 1).padStart(3, '0')}`;
+    }
     const opening = Number(supplierData.openingBalance) || 0;
 
     const newSupplier = await Supplier.create({
