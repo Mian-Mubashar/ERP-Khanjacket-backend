@@ -101,3 +101,4 @@ module.exports = {
   ALL_PERMISSIONS,
   DEFAULT_ROLE_PERMISSIONS
 };
+
