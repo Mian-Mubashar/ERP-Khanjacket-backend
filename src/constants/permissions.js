@@ -31,6 +31,8 @@ const PERMISSIONS = {
   SUPPLIERS_DELETE: 'suppliers:delete',
   SUPPLIER_PAYMENTS_READ: 'payments:supplier:read',
   SUPPLIER_PAYMENTS_CREATE: 'payments:supplier:create',
+  SUPPLIER_PAYMENTS_UPDATE: 'payments:supplier:update',
+  SUPPLIER_PAYMENTS_DELETE: 'payments:supplier:delete',
 
   // Wholesale Customers & Khata
   CUSTOMERS_READ: 'customers:read',
@@ -39,6 +41,8 @@ const PERMISSIONS = {
   CUSTOMERS_DELETE: 'customers:delete',
   CUSTOMER_PAYMENTS_READ: 'payments:customer:read',
   CUSTOMER_PAYMENTS_CREATE: 'payments:customer:create',
+  CUSTOMER_PAYMENTS_UPDATE: 'payments:customer:update',
+  CUSTOMER_PAYMENTS_DELETE: 'payments:customer:delete',
 
   // Hardware Devices (4-5 Devices Policy)
   DEVICES_READ: 'devices:read',

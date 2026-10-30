@@ -189,6 +189,93 @@ class SupplierService {
 
     return supplier;
   }
+
+  /**
+   * Update a specific supplier payment entry
+   */
+  static async updatePayment(id, data, currentUser) {
+    const t = await sequelize.transaction();
+    try {
+      const payment = await SupplierPayment.findByPk(id, { transaction: t });
+      if (!payment) {
+        throw ApiError.notFound(`Payment "${id}" not found`);
+      }
+
+      const oldAmt = Number(payment.amount) || 0;
+      const newAmt = data.amount !== undefined ? Number(data.amount) : oldAmt;
+      const diff = newAmt - oldAmt;
+
+      const supplier = await Supplier.findByPk(payment.supplierId, { transaction: t });
+      if (supplier && diff !== 0) {
+        await supplier.update({
+          totalPayments: Number(supplier.totalPayments) + diff,
+          remainingBalance: Number(supplier.remainingBalance) - diff
+        }, { transaction: t });
+      }
+
+      await payment.update({
+        date: data.date || payment.date,
+        amount: newAmt,
+        paymentMethod: data.paymentMethod || payment.paymentMethod,
+        refNo: data.refNo || payment.refNo,
+        notes: data.notes !== undefined ? data.notes : payment.notes
+      }, { transaction: t });
+
+      await AuditService.log({
+        action: 'Supplier Payment Updated',
+        category: 'Supplier Payment',
+        details: `Updated payment ${payment.refNo} (Old: Rs. ${oldAmt.toLocaleString()}, New: Rs. ${newAmt.toLocaleString()})`,
+        impact: `Supplier balance adjusted by Rs. ${(-diff).toLocaleString()}`,
+        user: currentUser,
+        transaction: t
+      });
+
+      await t.commit();
+      return payment;
+    } catch (err) {
+      await t.rollback();
+      throw err;
+    }
+  }
+
+  /**
+   * Delete a specific supplier payment entry and revert balance
+   */
+  static async deletePayment(id, currentUser) {
+    const t = await sequelize.transaction();
+    try {
+      const payment = await SupplierPayment.findByPk(id, { transaction: t });
+      if (!payment) {
+        throw ApiError.notFound(`Payment "${id}" not found`);
+      }
+
+      const payAmt = Number(payment.amount) || 0;
+      const supplier = await Supplier.findByPk(payment.supplierId, { transaction: t });
+      if (supplier) {
+        await supplier.update({
+          totalPayments: Math.max(0, Number(supplier.totalPayments) - payAmt),
+          remainingBalance: Number(supplier.remainingBalance) + payAmt
+        }, { transaction: t });
+      }
+
+      await payment.destroy({ transaction: t });
+
+      await AuditService.log({
+        action: 'Supplier Payment Deleted',
+        category: 'Supplier Payment',
+        details: `Deleted payment ${payment.refNo} (Rs. ${payAmt.toLocaleString()})`,
+        impact: `Restored Rs. ${payAmt.toLocaleString()} to supplier balance`,
+        user: currentUser,
+        transaction: t
+      });
+
+      await t.commit();
+      return { success: true, message: 'Payment entry deleted successfully' };
+    } catch (err) {
+      await t.rollback();
+      throw err;
+    }
+  }
 }
 
 module.exports = SupplierService;

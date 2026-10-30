@@ -185,6 +185,96 @@ class PurchaseService {
       throw error;
     }
   }
+
+  /**
+   * Update purchase invoice metadata (date, container, notes)
+   */
+  static async updatePurchase(id, data, currentUser) {
+    const purchase = await Purchase.findByPk(id);
+    if (!purchase) {
+      throw ApiError.notFound(`Purchase record "${id}" not found`);
+    }
+
+    const updates = {};
+    if (data.purchaseDate) updates.purchaseDate = data.purchaseDate;
+    if (data.containerNo) updates.containerNo = data.containerNo;
+    if (data.invoiceNo) updates.invoiceNo = data.invoiceNo;
+    if (data.notes !== undefined) updates.notes = data.notes;
+    if (data.expenseNote) updates.expenseNote = data.expenseNote;
+
+    await purchase.update(updates);
+
+    await AuditService.log({
+      action: 'Purchase Updated',
+      category: 'China Import',
+      details: `Updated purchase invoice #${purchase.invoiceNo}`,
+      impact: 'Purchase metadata updated',
+      user: currentUser
+    });
+
+    return purchase;
+  }
+
+  /**
+   * Delete purchase invoice and safely revert stock and supplier balance
+   */
+  static async deletePurchase(id, currentUser) {
+    const t = await sequelize.transaction();
+    try {
+      const purchase = await Purchase.findByPk(id, {
+        include: [{ model: PurchaseItem, as: 'items' }],
+        transaction: t
+      });
+      if (!purchase) {
+        throw ApiError.notFound(`Purchase record "${id}" not found`);
+      }
+
+      // 1. Revert article stock
+      for (const item of purchase.items || []) {
+        const article = await Article.findOne({ where: { articleNo: item.articleNo }, transaction: t });
+        if (article) {
+          const qty = Number(item.quantity) || 0;
+          await article.update({
+            totalPurchased: Math.max(0, (Number(article.totalPurchased) || 0) - qty),
+            currentStock: (Number(article.currentStock) || 0) - qty
+          }, { transaction: t });
+        }
+      }
+
+      // 2. Revert supplier balance
+      if (purchase.supplierId) {
+        const supplier = await Supplier.findByPk(purchase.supplierId, { transaction: t });
+        if (supplier) {
+          const billAmt = Number(purchase.totalBill) || 0;
+          const paidAmt = Number(purchase.paidAmount) || 0;
+          await supplier.update({
+            totalPurchases: Math.max(0, (Number(supplier.totalPurchases) || 0) - billAmt),
+            totalPayments: Math.max(0, (Number(supplier.totalPayments) || 0) - paidAmt),
+            remainingBalance: (Number(supplier.remainingBalance) || 0) - (billAmt - paidAmt)
+          }, { transaction: t });
+        }
+      }
+
+      // 3. Delete items and purchase
+      await PurchaseItem.destroy({ where: { purchaseId: id }, transaction: t });
+      await purchase.destroy({ transaction: t });
+
+      await AuditService.log({
+        action: 'Purchase Deleted',
+        category: 'China Import',
+        details: `Deleted purchase invoice #${purchase.invoiceNo} (${purchase.supplierName})`,
+        impact: `Reverted Rs. ${Number(purchase.totalBill).toLocaleString()} from supplier balance & stock`,
+        user: currentUser,
+        transaction: t
+      });
+
+      await t.commit();
+      return { success: true, message: 'Purchase invoice deleted successfully' };
+    } catch (err) {
+      await t.rollback();
+      throw err;
+    }
+  }
 }
 
 module.exports = PurchaseService;

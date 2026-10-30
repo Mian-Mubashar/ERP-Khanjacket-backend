@@ -28,6 +28,24 @@ class PurchaseController {
       next(error);
     }
   }
+
+  static async update(req, res, next) {
+    try {
+      const updated = await PurchaseService.updatePurchase(req.params.id, req.body, req.user);
+      return ApiResponse.success(res, updated, 'Purchase updated successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async delete(req, res, next) {
+    try {
+      const result = await PurchaseService.deletePurchase(req.params.id, req.user);
+      return ApiResponse.success(res, result, 'Purchase deleted and stock reverted successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = PurchaseController;

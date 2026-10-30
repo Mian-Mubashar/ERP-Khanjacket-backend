@@ -13,9 +13,13 @@ router.use(authenticate);
 // Supplier payments
 router.get('/supplier', requirePermission(PERMISSIONS.SUPPLIER_PAYMENTS_READ), PaymentController.listSupplierPayments);
 router.post('/supplier', requirePermission(PERMISSIONS.SUPPLIER_PAYMENTS_CREATE), validate(supplierPaymentSchema), PaymentController.recordSupplierPayment);
+router.put('/supplier/:id', requirePermission(PERMISSIONS.SUPPLIERS_UPDATE), PaymentController.updateSupplierPayment);
+router.delete('/supplier/:id', requirePermission(PERMISSIONS.SUPPLIERS_DELETE), PaymentController.deleteSupplierPayment);
 
 // Customer payments
 router.get('/customer', requirePermission(PERMISSIONS.CUSTOMER_PAYMENTS_READ), PaymentController.listCustomerPayments);
 router.post('/customer', requirePermission(PERMISSIONS.CUSTOMER_PAYMENTS_CREATE), validate(customerPaymentSchema), PaymentController.recordCustomerPayment);
+router.put('/customer/:id', requirePermission(PERMISSIONS.CUSTOMERS_UPDATE), PaymentController.updateCustomerPayment);
+router.delete('/customer/:id', requirePermission(PERMISSIONS.CUSTOMERS_DELETE), PaymentController.deleteCustomerPayment);
 
 module.exports = router;

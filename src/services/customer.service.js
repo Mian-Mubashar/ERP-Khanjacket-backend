@@ -293,6 +293,93 @@ class CustomerService {
       order: [['date', 'DESC'], ['createdAt', 'DESC']]
     });
   }
+
+  /**
+   * Update a specific customer payment receipt
+   */
+  static async updatePayment(id, data, currentUser) {
+    const t = await sequelize.transaction();
+    try {
+      const payment = await CustomerPayment.findByPk(id, { transaction: t });
+      if (!payment) {
+        throw ApiError.notFound(`Payment "${id}" not found`);
+      }
+
+      const oldAmt = Number(payment.amount) || 0;
+      const newAmt = data.amount !== undefined ? Number(data.amount) : oldAmt;
+      const diff = newAmt - oldAmt;
+
+      const customer = await Customer.findByPk(payment.customerId, { transaction: t });
+      if (customer && diff !== 0) {
+        await customer.update({
+          totalPaid: Number(customer.totalPaid || 0) + diff,
+          remainingBalance: Number(customer.remainingBalance || 0) - diff
+        }, { transaction: t });
+      }
+
+      await payment.update({
+        date: data.date || payment.date,
+        amount: newAmt,
+        paymentMethod: data.paymentMethod || payment.paymentMethod,
+        refNo: data.refNo || payment.refNo,
+        notes: data.notes !== undefined ? data.notes : payment.notes
+      }, { transaction: t });
+
+      await AuditService.log({
+        action: 'Customer Payment Updated',
+        category: 'Customer Khata',
+        details: `Updated payment ${payment.refNo} (Old: Rs. ${oldAmt.toLocaleString()}, New: Rs. ${newAmt.toLocaleString()})`,
+        impact: `Customer remaining balance adjusted by Rs. ${(-diff).toLocaleString()}`,
+        user: currentUser,
+        transaction: t
+      });
+
+      await t.commit();
+      return payment;
+    } catch (err) {
+      await t.rollback();
+      throw err;
+    }
+  }
+
+  /**
+   * Delete a specific customer payment receipt
+   */
+  static async deletePayment(id, currentUser) {
+    const t = await sequelize.transaction();
+    try {
+      const payment = await CustomerPayment.findByPk(id, { transaction: t });
+      if (!payment) {
+        throw ApiError.notFound(`Payment "${id}" not found`);
+      }
+
+      const payAmt = Number(payment.amount) || 0;
+      const customer = await Customer.findByPk(payment.customerId, { transaction: t });
+      if (customer) {
+        await customer.update({
+          totalPaid: Math.max(0, Number(customer.totalPaid || 0) - payAmt),
+          remainingBalance: Number(customer.remainingBalance || 0) + payAmt
+        }, { transaction: t });
+      }
+
+      await payment.destroy({ transaction: t });
+
+      await AuditService.log({
+        action: 'Customer Payment Deleted',
+        category: 'Customer Khata',
+        details: `Deleted customer payment ${payment.refNo} (Rs. ${payAmt.toLocaleString()})`,
+        impact: `Restored Rs. ${payAmt.toLocaleString()} to customer remaining balance`,
+        user: currentUser,
+        transaction: t
+      });
+
+      await t.commit();
+      return { success: true, message: 'Customer payment deleted successfully' };
+    } catch (err) {
+      await t.rollback();
+      throw err;
+    }
+  }
 }
 
 module.exports = CustomerService;

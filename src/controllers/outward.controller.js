@@ -19,6 +19,24 @@ class OutwardController {
       next(error);
     }
   }
+
+  static async update(req, res, next) {
+    try {
+      const updated = await OutwardService.updateOutward(req.params.id, req.body, req.user);
+      return ApiResponse.success(res, updated, 'Outward dispatch updated successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async delete(req, res, next) {
+    try {
+      const result = await OutwardService.deleteOutward(req.params.id, req.user);
+      return ApiResponse.success(res, result, 'Outward dispatch deleted and inventory restored');
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = OutwardController;
