@@ -8,9 +8,6 @@ const META_TABLE = 'SequelizeMeta';
 
 const getMigrationsDir = () => path.resolve(__dirname, '../migrations');
 
-/**
- * Ensure the SequelizeMeta table exists to track executed migrations
- */
 const ensureMetaTable = async (queryInterface) => {
   const tables = await queryInterface.showAllTables();
   const metaExists = tables.some(

@@ -276,6 +276,45 @@ class SupplierService {
       throw err;
     }
   }
+
+  /**
+   * Delete supplier (Transactional with cascade of payments, purchase unlinking)
+   */
+  static async deleteSupplier(id, currentUser) {
+    const t = await sequelize.transaction();
+    try {
+      const supplier = await Supplier.findByPk(id, { transaction: t });
+      if (!supplier) {
+        throw ApiError.notFound(`Supplier "${id}" not found`);
+      }
+
+      // 1. Delete associated supplier payments
+      await SupplierPayment.destroy({ where: { supplierId: id }, transaction: t });
+
+      // 2. Unlink purchases so stock/consignment records remain intact
+      await Purchase.update({ supplierId: null }, { where: { supplierId: id }, transaction: t });
+
+      // 3. Delete supplier
+      await supplier.destroy({ transaction: t });
+
+      // 4. Audit Log
+      const prevBal = Number(supplier.remainingBalance || 0);
+      await AuditService.log({
+        action: 'Supplier Deleted',
+        category: 'China Suppliers',
+        details: `Deleted supplier record ${id} (${supplier.name} - ${supplier.company})`,
+        impact: `Removed vendor profile. Unsettled balance was Rs. ${prevBal.toLocaleString()}`,
+        user: currentUser,
+        transaction: t
+      });
+
+      await t.commit();
+      return { success: true, message: `Supplier "${supplier.name}" deleted successfully` };
+    } catch (error) {
+      await t.rollback();
+      throw error;
+    }
+  }
 }
 
 module.exports = SupplierService;

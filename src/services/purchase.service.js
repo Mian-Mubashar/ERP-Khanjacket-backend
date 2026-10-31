@@ -187,32 +187,79 @@ class PurchaseService {
   }
 
   /**
-   * Update purchase invoice metadata (date, container, notes)
+   * Update purchase invoice metadata (date, container, notes, expenses, payment)
    */
   static async updatePurchase(id, data, currentUser) {
-    const purchase = await Purchase.findByPk(id);
-    if (!purchase) {
-      throw ApiError.notFound(`Purchase record "${id}" not found`);
+    const t = await sequelize.transaction();
+    try {
+      const purchase = await Purchase.findByPk(id, { transaction: t });
+      if (!purchase) {
+        throw ApiError.notFound(`Purchase record "${id}" not found`);
+      }
+
+      const updates = {};
+      if (data.purchaseDate) updates.purchaseDate = data.purchaseDate;
+      if (data.containerNo !== undefined) updates.containerNo = data.containerNo;
+      if (data.invoiceNo) updates.invoiceNo = data.invoiceNo;
+      if (data.notes !== undefined) updates.notes = data.notes;
+      if (data.expenseNote !== undefined) updates.expenseNote = data.expenseNote;
+
+      let billDiff = 0;
+      let paidDiff = 0;
+
+      if (data.extraExpenses !== undefined) {
+        const oldExpenses = Number(purchase.extraExpenses) || 0;
+        const newExpenses = Number(data.extraExpenses) || 0;
+        const expenseDiff = newExpenses - oldExpenses;
+        updates.extraExpenses = newExpenses;
+        updates.totalBill = (Number(purchase.totalBill) || 0) + expenseDiff;
+        billDiff += expenseDiff;
+      }
+
+      if (data.paidAmount !== undefined) {
+        const oldPaid = Number(purchase.paidAmount) || 0;
+        const newPaid = Number(data.paidAmount) || 0;
+        paidDiff = newPaid - oldPaid;
+        updates.paidAmount = newPaid;
+      }
+
+      if (billDiff !== 0 || paidDiff !== 0) {
+        const newTotalBill = updates.totalBill !== undefined ? updates.totalBill : Number(purchase.totalBill);
+        const newPaidAmount = updates.paidAmount !== undefined ? updates.paidAmount : Number(purchase.paidAmount);
+        updates.remainingAmount = newTotalBill - newPaidAmount;
+
+        // Adjust supplier balance if supplierId is present
+        if (purchase.supplierId) {
+          const supplier = await Supplier.findByPk(purchase.supplierId, { transaction: t });
+          if (supplier) {
+            await supplier.update({
+              totalPurchases: Math.max(0, (Number(supplier.totalPurchases) || 0) + billDiff),
+              totalPayments: Math.max(0, (Number(supplier.totalPayments) || 0) + paidDiff),
+              remainingBalance: (Number(supplier.remainingBalance) || 0) + (billDiff - paidDiff)
+            }, { transaction: t });
+          }
+        }
+      }
+
+      await purchase.update(updates, { transaction: t });
+
+      await AuditService.log({
+        action: 'Purchase Updated',
+        category: 'China Import',
+        details: `Updated purchase invoice #${purchase.invoiceNo} (${purchase.supplierName})`,
+        impact: `Metadata updated${billDiff !== 0 ? `, bill adjusted by Rs. ${billDiff.toLocaleString()}` : ''}`,
+        user: currentUser,
+        transaction: t
+      });
+
+      await t.commit();
+      return await Purchase.findByPk(id, {
+        include: [{ model: PurchaseItem, as: 'items' }]
+      });
+    } catch (err) {
+      await t.rollback();
+      throw err;
     }
-
-    const updates = {};
-    if (data.purchaseDate) updates.purchaseDate = data.purchaseDate;
-    if (data.containerNo) updates.containerNo = data.containerNo;
-    if (data.invoiceNo) updates.invoiceNo = data.invoiceNo;
-    if (data.notes !== undefined) updates.notes = data.notes;
-    if (data.expenseNote) updates.expenseNote = data.expenseNote;
-
-    await purchase.update(updates);
-
-    await AuditService.log({
-      action: 'Purchase Updated',
-      category: 'China Import',
-      details: `Updated purchase invoice #${purchase.invoiceNo}`,
-      impact: 'Purchase metadata updated',
-      user: currentUser
-    });
-
-    return purchase;
   }
 
   /**

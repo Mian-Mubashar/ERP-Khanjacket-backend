@@ -13,7 +13,7 @@ router.use(authenticate);
 router.get('/', requirePermission(PERMISSIONS.PURCHASES_READ), PurchaseController.list);
 router.get('/:id', requirePermission(PERMISSIONS.PURCHASES_READ), PurchaseController.getOne);
 router.post('/', requirePermission(PERMISSIONS.PURCHASES_CREATE), validate(createPurchaseSchema), PurchaseController.create);
-router.put('/:id', requirePermission(PERMISSIONS.PURCHASES_UPDATE), PurchaseController.update);
-router.delete('/:id', requirePermission(PERMISSIONS.PURCHASES_DELETE), PurchaseController.delete);
+router.put('/:id', requirePermission(PERMISSIONS.PURCHASES_UPDATE || PERMISSIONS.PURCHASES_CREATE), PurchaseController.update);
+router.delete('/:id', requirePermission(PERMISSIONS.PURCHASES_DELETE || PERMISSIONS.PURCHASES_UPDATE), PurchaseController.delete);
 
 module.exports = router;

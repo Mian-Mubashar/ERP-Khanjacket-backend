@@ -13,7 +13,7 @@ const Purchase = sequelize.define('Purchase', {
   },
   supplierId: {
     type: DataTypes.STRING(50),
-    allowNull: false,
+    allowNull: true,
     references: {
       model: 'suppliers',
       key: 'id'

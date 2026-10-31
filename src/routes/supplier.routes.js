@@ -14,5 +14,6 @@ router.get('/', requirePermission(PERMISSIONS.SUPPLIERS_READ), SupplierControlle
 router.get('/:id', requirePermission(PERMISSIONS.SUPPLIERS_READ), SupplierController.getOne);
 router.post('/', requirePermission(PERMISSIONS.SUPPLIERS_CREATE), validate(createSupplierSchema), SupplierController.create);
 router.put('/:id', requirePermission(PERMISSIONS.SUPPLIERS_UPDATE || PERMISSIONS.SUPPLIERS_CREATE), validate(updateSupplierSchema), SupplierController.update);
+router.delete('/:id', requirePermission(PERMISSIONS.SUPPLIERS_DELETE || PERMISSIONS.SUPPLIERS_UPDATE), SupplierController.delete);
 
 module.exports = router;

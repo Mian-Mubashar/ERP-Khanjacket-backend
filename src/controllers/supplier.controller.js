@@ -37,6 +37,15 @@ class SupplierController {
       next(error);
     }
   }
+
+  static async delete(req, res, next) {
+    try {
+      const result = await SupplierService.deleteSupplier(req.params.id, req.user);
+      return ApiResponse.success(res, result, 'Supplier deleted successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = SupplierController;

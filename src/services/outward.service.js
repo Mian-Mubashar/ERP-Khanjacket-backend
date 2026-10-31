@@ -165,7 +165,7 @@ class OutwardService {
   }
 
   /**
-   * Update Outward Dispatch
+   * Update Outward Dispatch and automatically reconcile stock and customer khata
    */
   static async updateOutward(id, data, currentUser) {
     const t = await sequelize.transaction();
@@ -175,19 +175,66 @@ class OutwardService {
         throw ApiError.notFound(`Outward dispatch "${id}" not found`);
       }
 
+      const oldQty = Number(outward.quantity) || 0;
+      const oldSalePrice = Number(outward.unitSalePrice) || 0;
+      const oldBill = Number(outward.totalSaleAmount) || (oldQty * oldSalePrice);
+
+      const newQty = data.quantity !== undefined && !isNaN(Number(data.quantity)) ? Math.max(1, Math.round(Number(data.quantity))) : oldQty;
+      const newSalePrice = data.unitSalePrice !== undefined && !isNaN(Number(data.unitSalePrice)) ? Math.max(0, Number(data.unitSalePrice)) : oldSalePrice;
+      const newBill = newQty * newSalePrice;
+      const qtyDiff = newQty - oldQty;
+      const billDiff = newBill - oldBill;
+
+      // 1. Reconcile Article Stock
+      if (outward.articleNo && qtyDiff !== 0) {
+        const article = await Article.findOne({ where: { articleNo: outward.articleNo }, transaction: t });
+        if (article) {
+          await article.update({
+            totalOut: Math.max(0, (article.totalOut || 0) + qtyDiff),
+            currentStock: (article.currentStock || 0) - qtyDiff
+          }, { transaction: t });
+        }
+      }
+
+      // 2. Reconcile City totalMalSent
+      if (outward.city && qtyDiff !== 0) {
+        const cityRecord = await City.findOne({ where: { name: outward.city }, transaction: t });
+        if (cityRecord) {
+          await cityRecord.update({
+            totalMalSent: Math.max(0, (cityRecord.totalMalSent || 0) + qtyDiff)
+          }, { transaction: t });
+        }
+      }
+
+      // 3. Reconcile Customer Khata
+      if (outward.customerId && (qtyDiff !== 0 || billDiff !== 0)) {
+        const customer = await Customer.findByPk(outward.customerId, { transaction: t });
+        if (customer) {
+          await customer.update({
+            totalPiecesReceived: Math.max(0, (customer.totalPiecesReceived || 0) + qtyDiff),
+            totalBill: Math.max(0, Number(customer.totalBill || 0) + billDiff),
+            remainingBalance: Number(customer.remainingBalance || 0) + billDiff
+          }, { transaction: t });
+        }
+      }
+
       const updates = {};
       if (data.date) updates.date = data.date;
+      if (data.challanNo) updates.challanNo = data.challanNo;
       if (data.gatePassNo !== undefined) updates.gatePassNo = data.gatePassNo;
       if (data.destination !== undefined) updates.destination = data.destination;
       if (data.notes !== undefined) updates.notes = data.notes;
+      if (data.quantity !== undefined) updates.quantity = newQty;
+      if (data.unitSalePrice !== undefined) updates.unitSalePrice = newSalePrice;
+      if (data.quantity !== undefined || data.unitSalePrice !== undefined) updates.totalSaleAmount = newBill;
 
       await outward.update(updates, { transaction: t });
 
       await AuditService.log({
         action: 'Outward Dispatch Updated',
         category: 'Warehouse Outward',
-        details: `Updated dispatch ${outward.challanNo} (${outward.articleNo})`,
-        impact: 'Outward record modified',
+        details: `Updated dispatch ${outward.challanNo} (${outward.articleNo}) - Qty: ${oldQty} -> ${newQty}, Rate: ${oldSalePrice} -> ${newSalePrice}`,
+        impact: `Stock diff: ${-qtyDiff} pcs. Khata bill diff: Rs. ${billDiff.toLocaleString()}`,
         user: currentUser,
         transaction: t
       });
