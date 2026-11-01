@@ -67,6 +67,11 @@ const Outward = sequelize.define('Outward', {
     type: DataTypes.STRING(50),
     allowNull: true
   },
+  isWithoutStock: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  },
   recordedBy: {
     type: DataTypes.STRING(100),
     allowNull: true

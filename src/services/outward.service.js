@@ -38,7 +38,8 @@ class OutwardService {
     const t = await sequelize.transaction();
 
     try {
-      const articleNo = outwardData.articleNo.toUpperCase().trim();
+      const isWithoutStock = Boolean(outwardData.isWithoutStock);
+      const articleNo = (outwardData.articleNo || 'DIRECT-SALE').toUpperCase().trim();
       const reqQty = Number(outwardData.quantity);
 
       // 1. Fetch Article or auto-register if missing (no strict stock blocking)
@@ -46,8 +47,8 @@ class OutwardService {
       if (!article) {
         article = await Article.create({
           articleNo,
-          name: outwardData.articleName || `Garment ${articleNo}`,
-          category: outwardData.category || 'Outerwear',
+          name: outwardData.articleName || (isWithoutStock ? 'Direct Sale (Bina Stock)' : `Garment ${articleNo}`),
+          category: outwardData.category || 'General',
           stuff: outwardData.stuff || 'Standard',
           unitCost: Number(outwardData.unitSalePrice) || 0,
           unitSalePrice: Number(outwardData.unitSalePrice) || 0,
@@ -83,15 +84,18 @@ class OutwardService {
         unitSalePrice,
         totalSaleAmount,
         gatePassNo,
+        isWithoutStock,
         recordedBy: currentUser?.name || 'Staff',
         notes: outwardData.notes || ''
       }, { transaction: t });
 
-      // 3. Update Inventory Stock tracking
-      await article.update({
-        totalOut: (article.totalOut || 0) + reqQty,
-        currentStock: (article.currentStock || 0) - reqQty
-      }, { transaction: t });
+      // 3. Update Inventory Stock tracking (only if normal With-Stock bill)
+      if (!isWithoutStock) {
+        await article.update({
+          totalOut: (article.totalOut || 0) + reqQty,
+          currentStock: (article.currentStock || 0) - reqQty
+        }, { transaction: t });
+      }
 
       // 4. Update Customer / Shopkeeper Khata (if customer matched)
       let customerRecord = null;
@@ -185,8 +189,8 @@ class OutwardService {
       const qtyDiff = newQty - oldQty;
       const billDiff = newBill - oldBill;
 
-      // 1. Reconcile Article Stock
-      if (outward.articleNo && qtyDiff !== 0) {
+      // 1. Reconcile Article Stock (skip if without stock bill)
+      if (outward.articleNo && qtyDiff !== 0 && !outward.isWithoutStock) {
         const article = await Article.findOne({ where: { articleNo: outward.articleNo }, transaction: t });
         if (article) {
           await article.update({
@@ -261,8 +265,8 @@ class OutwardService {
       const qty = Number(outward.quantity) || 0;
       const billAmt = Number(outward.totalSaleAmount) || 0;
 
-      // 1. Revert Article inventory stock
-      if (outward.articleNo && qty > 0) {
+      // 1. Revert Article inventory stock (skip if without stock bill)
+      if (outward.articleNo && qty > 0 && !outward.isWithoutStock) {
         const article = await Article.findByPk(outward.articleNo, { transaction: t });
         if (article) {
           await article.update({

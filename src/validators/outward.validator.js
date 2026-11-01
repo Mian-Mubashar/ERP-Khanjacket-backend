@@ -2,9 +2,7 @@ const Joi = require('joi');
 
 const createOutwardSchema = {
   body: Joi.object({
-    articleNo: Joi.string().trim().uppercase().required().messages({
-      'any.required': 'Article selection is required'
-    }),
+    articleNo: Joi.string().trim().uppercase().allow('', null).empty('').default('DIRECT-SALE'),
     quantity: Joi.number().integer().positive().required().messages({
       'any.required': 'Dispatched quantity is required'
     }),
@@ -25,6 +23,7 @@ const createOutwardSchema = {
     paymentMethod: Joi.string().allow('', null),
     challanNo: Joi.string().allow('', null),
     gatePassNo: Joi.string().allow('', null),
+    isWithoutStock: Joi.boolean().default(false),
     date: Joi.date().iso().allow('', null),
     notes: Joi.string().allow('', null)
   })
