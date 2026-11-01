@@ -12,7 +12,9 @@ const createCustomerSchema = {
     marketAddress: Joi.string().allow('', null),
     phone: Joi.string().allow('', null),
     openingBalance: Joi.number().min(0).empty('').default(0),
-    notes: Joi.string().allow('', null)
+    notes: Joi.string().allow('', null),
+    inUgrahi: Joi.boolean().allow(null).default(false),
+    ugrahiRoute: Joi.string().trim().allow('', null)
   })
 };
 
@@ -27,7 +29,9 @@ const updateCustomerSchema = {
     marketAddress: Joi.string().allow('', null),
     phone: Joi.string().allow('', null),
     openingBalance: Joi.number().min(0).allow(null, '').default(0),
-    notes: Joi.string().allow('', null)
+    notes: Joi.string().allow('', null),
+    inUgrahi: Joi.boolean().allow(null),
+    ugrahiRoute: Joi.string().trim().allow('', null)
   }).min(1)
 };
 

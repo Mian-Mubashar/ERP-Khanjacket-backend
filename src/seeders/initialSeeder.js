@@ -127,7 +127,10 @@ const seedDatabase = async () => {
       { id: 4, name: 'Faisalabad', totalShops: 0, totalMalSent: 0 },
       { id: 5, name: 'Rawalpindi', totalShops: 0, totalMalSent: 0 },
       { id: 6, name: 'Peshawar', totalShops: 0, totalMalSent: 0 },
-      { id: 7, name: 'Multan', totalShops: 0, totalMalSent: 0 }
+      { id: 7, name: 'Multan', totalShops: 0, totalMalSent: 0 },
+      { id: 8, name: 'Raiwind', totalShops: 0, totalMalSent: 0 },
+      { id: 9, name: 'Sheikhupura', totalShops: 0, totalMalSent: 0 },
+      { id: 10, name: 'Sialkot', totalShops: 0, totalMalSent: 0 }
     ];
     for (const city of cities) {
       await City.findOrCreate({ where: { id: city.id }, defaults: city });

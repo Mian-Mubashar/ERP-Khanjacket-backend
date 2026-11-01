@@ -81,7 +81,9 @@ class CustomerService {
         totalBill: opening,
         totalPaid: 0,
         remainingBalance: opening,
-        notes: custData.notes?.trim() || ''
+        notes: custData.notes?.trim() || '',
+        inUgrahi: Boolean(custData.inUgrahi),
+        ugrahiRoute: custData.inUgrahi ? (custData.ugrahiRoute?.trim() || 'Lahore') : null
       }, { transaction: t });
 
       // Increment City shops counter

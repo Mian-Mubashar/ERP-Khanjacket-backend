@@ -46,6 +46,14 @@ const Customer = sequelize.define('Customer', {
   notes: {
     type: DataTypes.TEXT,
     allowNull: true
+  },
+  inUgrahi: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  ugrahiRoute: {
+    type: DataTypes.STRING(50),
+    allowNull: true
   }
 }, {
   tableName: 'customers',
