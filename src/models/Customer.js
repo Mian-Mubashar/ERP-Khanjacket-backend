@@ -19,6 +19,10 @@ const Customer = sequelize.define('Customer', {
     type: DataTypes.STRING(100),
     allowNull: false
   },
+  area: {
+    type: DataTypes.STRING(100),
+    allowNull: true
+  },
   marketAddress: {
     type: DataTypes.TEXT,
     allowNull: true

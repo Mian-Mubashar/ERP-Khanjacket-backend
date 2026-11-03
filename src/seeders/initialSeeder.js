@@ -7,6 +7,7 @@ const {
   Category,
   Stuff,
   City,
+  Area,
   Supplier,
   Article,
   Customer,
@@ -134,6 +135,46 @@ const seedDatabase = async () => {
     ];
     for (const city of cities) {
       await City.findOrCreate({ where: { id: city.id }, defaults: city });
+    }
+
+    // 7.1 Seed Initial Areas per City
+    const defaultAreas = [
+      // Lahore
+      { cityName: 'Lahore', name: 'Shahdara' },
+      { cityName: 'Lahore', name: 'Cantt' },
+      { cityName: 'Lahore', name: 'Anarkali' },
+      { cityName: 'Lahore', name: 'Azam Market' },
+      { cityName: 'Lahore', name: 'Shah Alam' },
+      { cityName: 'Lahore', name: 'Ichhra' },
+      { cityName: 'Lahore', name: 'Thokar Niaz Baig' },
+      { cityName: 'Lahore', name: 'Badami Bagh' },
+      { cityName: 'Lahore', name: 'Baghbanpura' },
+      // Raiwind
+      { cityName: 'Raiwind', name: 'Manga Mandi' },
+      { cityName: 'Raiwind', name: 'Raiwind City' },
+      { cityName: 'Raiwind', name: 'Phool Nagar' },
+      // Sheikhupura
+      { cityName: 'Sheikhupura', name: 'Sheikhupura City' },
+      { cityName: 'Sheikhupura', name: 'Bhikhi' },
+      { cityName: 'Sheikhupura', name: 'Safdarabad' },
+      { cityName: 'Sheikhupura', name: 'Farooqabad' },
+      // Multan
+      { cityName: 'Multan', name: 'Hussain Agahi' },
+      { cityName: 'Multan', name: 'Cantt' },
+      { cityName: 'Multan', name: 'Ghanta Ghar' },
+      // Sialkot
+      { cityName: 'Sialkot', name: 'Saddar Bazaar' },
+      { cityName: 'Sialkot', name: 'Kashmiri Bazaar' },
+      // Rawalpindi
+      { cityName: 'Rawalpindi', name: 'Raja Bazaar' },
+      { cityName: 'Rawalpindi', name: 'Saddar' }
+    ];
+
+    for (const a of defaultAreas) {
+      await Area.findOrCreate({
+        where: { cityName: a.cityName, name: a.name },
+        defaults: a
+      });
     }
 
     // 8. Seed Authorized Hardware Devices (Khan Clothes 4-5 mobile units policy)

@@ -75,6 +75,7 @@ class CustomerService {
         shopName: custData.shopName.trim(),
         shopkeeperName: custData.shopkeeperName?.trim() || custData.shopName.trim(),
         city: custData.city.trim(),
+        area: custData.area?.trim() || null,
         marketAddress: custData.marketAddress?.trim() || '',
         phone: custData.phone?.trim() || '',
         totalPiecesReceived: 0,

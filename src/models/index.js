@@ -17,6 +17,7 @@ const CustomerPayment = require('./CustomerPayment');
 const Device = require('./Device');
 const AuditLog = require('./AuditLog');
 const WarehouseLocation = require('./WarehouseLocation');
+const Area = require('./Area');
 
 // Define Relationships
 
@@ -66,6 +67,10 @@ CustomerPayment.belongsTo(Customer, { foreignKey: 'customerId', as: 'customer' }
 Customer.hasMany(Outward, { foreignKey: 'customerId', as: 'dispatches', onDelete: 'SET NULL' });
 Outward.belongsTo(Customer, { foreignKey: 'customerId', as: 'customer' });
 
+// City <-> Area (1:N)
+City.hasMany(Area, { foreignKey: 'cityName', sourceKey: 'name', as: 'areas', onDelete: 'CASCADE' });
+Area.belongsTo(City, { foreignKey: 'cityName', targetKey: 'name', as: 'city' });
+
 module.exports = {
   sequelize,
   Role,
@@ -76,6 +81,7 @@ module.exports = {
   Category,
   Stuff,
   City,
+  Area,
   Supplier,
   Customer,
   Purchase,
