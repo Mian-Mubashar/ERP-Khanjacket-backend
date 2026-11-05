@@ -73,8 +73,8 @@ class OutwardService {
         challanNo,
         date,
         articleNo: article.articleNo,
-        articleName: article.name,
-        category: article.category,
+        articleName: outwardData.articleName || article.name,
+        category: outwardData.category || article.category,
         quantity: reqQty,
         city: outwardData.city || '',
         customerId: outwardData.customerId || null,
@@ -128,15 +128,15 @@ class OutwardService {
 
         const netBalanceAddition = totalSaleAmount - paidAmount;
         await customerRecord.update({
-          totalPiecesReceived: (customerRecord.totalPiecesReceived || 0) + reqQty,
+          totalPiecesReceived: (customerRecord.totalPiecesReceived || 0) + (isWithoutStock ? 0 : reqQty),
           totalBill: Number(customerRecord.totalBill || 0) + totalSaleAmount,
           totalPaid: Number(customerRecord.totalPaid || 0) + paidAmount,
           remainingBalance: Number(customerRecord.remainingBalance || 0) + netBalanceAddition
         }, { transaction: t });
       }
 
-      // 5. Update City Branch Mal counter
-      if (outwardData.city) {
+      // 5. Update City Branch Mal counter (only for physical inventory dispatch)
+      if (outwardData.city && !isWithoutStock) {
         const cityRecord = await City.findOne({
           where: { name: outwardData.city.trim() },
           transaction: t
@@ -150,10 +150,14 @@ class OutwardService {
 
       // 6. Record Audit Log
       await AuditService.log({
-        action: 'Stock Outward Dispatched',
+        action: isWithoutStock ? 'Direct Sale Billed (Without Stock)' : 'Stock Outward Dispatched',
         category: 'Warehouse Outward',
-        details: `Dispatched ${reqQty} pcs of ${article.articleNo} to ${newOutward.customerName} (${newOutward.city || newOutward.destination})`,
-        impact: `Stock reduced from ${article.currentStock} to ${article.currentStock - reqQty} pcs. Bill: Rs. ${totalSaleAmount.toLocaleString()}`,
+        details: isWithoutStock 
+          ? `Direct Bill #${challanNo} of Rs. ${totalSaleAmount.toLocaleString()} (${newOutward.articleName}) to ${newOutward.customerName}`
+          : `Dispatched ${reqQty} pcs of ${article.articleNo} to ${newOutward.customerName} (${newOutward.city || newOutward.destination})`,
+        impact: isWithoutStock
+          ? `Direct bill recorded without stock deduction. Customer balance increased by Rs. ${netBalanceAddition.toLocaleString()}`
+          : `Stock reduced from ${article.currentStock} to ${article.currentStock - reqQty} pcs. Bill: Rs. ${totalSaleAmount.toLocaleString()}`,
         user: currentUser,
         transaction: t
       });
