@@ -73,7 +73,7 @@ class CustomerService {
       const newCustomer = await Customer.create({
         id: newId,
         shopName: custData.shopName.trim(),
-        shopkeeperName: custData.shopkeeperName?.trim() || custData.shopName.trim(),
+        shopkeeperName: custData.shopkeeperName?.trim() || '',
         city: custData.city.trim(),
         area: custData.area?.trim() || null,
         marketAddress: custData.marketAddress?.trim() || '',
@@ -96,7 +96,7 @@ class CustomerService {
       await AuditService.log({
         action: 'Shopkeeper Registered',
         category: 'Wholesale Customers',
-        details: `Added shop ${newCustomer.shopName} (${newCustomer.shopkeeperName}) in ${newCustomer.city}`,
+        details: `Added shop ${newCustomer.shopName}${newCustomer.shopkeeperName ? ` (${newCustomer.shopkeeperName})` : ''} in ${newCustomer.city}`,
         impact: `Opening Khata Balance: Rs. ${opening.toLocaleString()}`,
         user: currentUser,
         transaction: t
