@@ -131,14 +131,24 @@ const seedDatabase = async () => {
       { id: 7, name: 'Multan', totalShops: 0, totalMalSent: 0 },
       { id: 8, name: 'Raiwind', totalShops: 0, totalMalSent: 0 },
       { id: 9, name: 'Sheikhupura', totalShops: 0, totalMalSent: 0 },
-      { id: 10, name: 'Sialkot', totalShops: 0, totalMalSent: 0 }
+      { id: 10, name: 'Sialkot', totalShops: 0, totalMalSent: 0 },
+      { id: 11, name: 'Androon Lahore', totalShops: 0, totalMalSent: 0 }
     ];
     for (const city of cities) {
-      await City.findOrCreate({ where: { id: city.id }, defaults: city });
+      await City.findOrCreate({ where: { name: city.name }, defaults: city });
     }
 
     // 7.1 Seed Initial Areas per City
     const defaultAreas = [
+      // Androon Lahore
+      { cityName: 'Androon Lahore', name: 'Shah Alam' },
+      { cityName: 'Androon Lahore', name: 'Azam Market' },
+      { cityName: 'Androon Lahore', name: 'Kashmiri Bazaar' },
+      { cityName: 'Androon Lahore', name: 'Delhi Gate' },
+      { cityName: 'Androon Lahore', name: 'Rang Mahal' },
+      { cityName: 'Androon Lahore', name: 'Mochi Gate' },
+      { cityName: 'Androon Lahore', name: 'Bhati Gate' },
+      { cityName: 'Androon Lahore', name: 'Lohari Gate' },
       // Lahore
       { cityName: 'Lahore', name: 'Shahdara' },
       { cityName: 'Lahore', name: 'Cantt' },
