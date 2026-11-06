@@ -62,6 +62,7 @@ class OutwardService {
       const unitSalePrice = Number(outwardData.unitSalePrice) || 0;
       const totalSaleAmount = unitSalePrice * reqQty;
       const paidAmount = Number(outwardData.paidAmount) || 0;
+      const netBalanceAddition = totalSaleAmount - paidAmount;
       const newId = `OUT-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`;
       const challanNo = outwardData.challanNo || `CH-${Date.now().toString().slice(-4)}`;
       const gatePassNo = outwardData.gatePassNo || `GP-${Date.now().toString().slice(-3)}`;
@@ -97,7 +98,7 @@ class OutwardService {
         }, { transaction: t });
       }
 
-      // 4. Update Customer / Shopkeeper Khata (if customer matched)
+      // 4. Update Customer / Shopkeeper Khata (if customer matched or auto-create)
       let customerRecord = null;
       if (outwardData.customerId) {
         customerRecord = await Customer.findByPk(outwardData.customerId, { transaction: t });
@@ -106,6 +107,26 @@ class OutwardService {
           where: { shopName: outwardData.customerName.trim() },
           transaction: t
         });
+      }
+
+      // If customer does not exist yet in db, auto-create customer so their khata is tracked
+      if (!customerRecord && outwardData.customerName && outwardData.customerName.trim()) {
+        const newCustId = `CUST-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`;
+        customerRecord = await Customer.create({
+          id: newCustId,
+          shopName: outwardData.customerName.trim(),
+          shopkeeperName: '',
+          city: outwardData.city || 'Lahore',
+          marketAddress: outwardData.destination || '',
+          phone: outwardData.customerPhone || '',
+          totalPiecesReceived: 0,
+          totalBill: 0,
+          totalPaid: 0,
+          remainingBalance: 0
+        }, { transaction: t });
+
+        // Link outward record to new customer
+        await newOutward.update({ customerId: customerRecord.id }, { transaction: t });
       }
 
       if (customerRecord) {
@@ -126,7 +147,6 @@ class OutwardService {
           }, { transaction: t });
         }
 
-        const netBalanceAddition = totalSaleAmount - paidAmount;
         await customerRecord.update({
           totalPiecesReceived: (customerRecord.totalPiecesReceived || 0) + (isWithoutStock ? 0 : reqQty),
           totalBill: Number(customerRecord.totalBill || 0) + totalSaleAmount,
