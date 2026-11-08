@@ -15,6 +15,7 @@ const auditRoutes = require('./audit.routes');
 const reportRoutes = require('./report.routes');
 const backupRoutes = require('./backup.routes');
 const notificationRoutes = require('./notification.routes');
+const clearanceRoutes = require('./clearance.routes');
 const config = require('../config/env');
 
 const router = express.Router();
@@ -47,5 +48,6 @@ router.use('/audit', auditRoutes);
 router.use('/reports', reportRoutes);
 router.use('/backup', backupRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/clearances', clearanceRoutes);
 
 module.exports = router;

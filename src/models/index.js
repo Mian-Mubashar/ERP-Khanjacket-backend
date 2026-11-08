@@ -19,6 +19,7 @@ const AuditLog = require('./AuditLog');
 const WarehouseLocation = require('./WarehouseLocation');
 const Area = require('./Area');
 const Notification = require('./Notification');
+const ContainerClearance = require('./ContainerClearance');
 
 // Define Relationships
 
@@ -72,6 +73,10 @@ Outward.belongsTo(Customer, { foreignKey: 'customerId', as: 'customer' });
 City.hasMany(Area, { foreignKey: 'cityName', sourceKey: 'name', as: 'areas', onDelete: 'CASCADE' });
 Area.belongsTo(City, { foreignKey: 'cityName', targetKey: 'name', as: 'city' });
 
+// Purchase <-> ContainerClearance (1:N)
+Purchase.hasMany(ContainerClearance, { foreignKey: 'purchaseId', as: 'clearanceBills', onDelete: 'SET NULL' });
+ContainerClearance.belongsTo(Purchase, { foreignKey: 'purchaseId', as: 'purchase' });
+
 module.exports = {
   sequelize,
   Role,
@@ -93,5 +98,6 @@ module.exports = {
   Device,
   AuditLog,
   WarehouseLocation,
-  Notification
+  Notification,
+  ContainerClearance
 };
