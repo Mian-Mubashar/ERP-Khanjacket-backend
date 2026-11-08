@@ -13,3 +13,4 @@ router.put('/:id', ClearanceController.update);
 router.delete('/:id', ClearanceController.delete);
 
 module.exports = router;
+

@@ -192,3 +192,4 @@ module.exports = {
     await queryInterface.dropTable('container_clearances');
   }
 };
+

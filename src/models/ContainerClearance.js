@@ -172,3 +172,4 @@ const ContainerClearance = sequelize.define('ContainerClearance', {
 });
 
 module.exports = ContainerClearance;
+

@@ -17,6 +17,7 @@ class CustomerService {
         { shopName: { [Op.like]: `%${search}%` } },
         { shopkeeperName: { [Op.like]: `%${search}%` } },
         { phone: { [Op.like]: `%${search}%` } },
+        { phone2: { [Op.like]: `%${search}%` } },
         { city: { [Op.like]: `%${search}%` } },
         { id: { [Op.like]: `%${search}%` } }
       ];
@@ -78,6 +79,7 @@ class CustomerService {
         area: custData.area?.trim() || null,
         marketAddress: custData.marketAddress?.trim() || '',
         phone: custData.phone?.trim() || '',
+        phone2: custData.phone2?.trim() || '',
         totalPiecesReceived: 0,
         totalBill: opening,
         totalPaid: 0,

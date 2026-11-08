@@ -31,6 +31,10 @@ const Customer = sequelize.define('Customer', {
     type: DataTypes.STRING(50),
     allowNull: true
   },
+  phone2: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
   totalPiecesReceived: {
     type: DataTypes.INTEGER,
     defaultValue: 0

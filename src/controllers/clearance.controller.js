@@ -49,3 +49,4 @@ class ClearanceController {
 }
 
 module.exports = ClearanceController;
+
