@@ -277,6 +277,25 @@ class CustomerService {
       });
 
       await t.commit();
+
+      // Non-blocking Announcement / Notification creation
+      try {
+        const NotificationService = require('./notification.service');
+        NotificationService.createNotification({
+          type: 'WASOOLI',
+          title: `Wasooli: Rs. ${payAmt.toLocaleString()}`,
+          message: `${customer.shopName} se wasooli mil gayi (${method})`,
+          category: 'Wasooli',
+          referenceId: refNo,
+          city: customer.city || '',
+          customerName: `${customer.shopName} (${customer.shopkeeperName || ''})`,
+          amount: payAmt,
+          urgency: 'success'
+        }).catch(() => {});
+      } catch (notifErr) {
+        // Safe ignore
+      }
+
       return newPayment;
     } catch (error) {
       await t.rollback();

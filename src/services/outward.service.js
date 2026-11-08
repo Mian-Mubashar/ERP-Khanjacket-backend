@@ -185,6 +185,24 @@ class OutwardService {
       // Commit transaction
       await t.commit();
 
+      // Non-blocking Announcement / Notification creation
+      try {
+        const NotificationService = require('./notification.service');
+        NotificationService.createNotification({
+          type: 'BILL',
+          title: `Bill #${challanNo}: Rs. ${totalSaleAmount.toLocaleString()}`,
+          message: `${newOutward.customerName || 'Customer'} ke naam bill #${challanNo} dispatch ho gaya`,
+          category: 'Dispatches',
+          referenceId: challanNo,
+          city: newOutward.city || newOutward.destination || '',
+          customerName: newOutward.customerName || '',
+          amount: totalSaleAmount,
+          urgency: 'info'
+        }).catch(() => {});
+      } catch (notifErr) {
+        // Safe ignore
+      }
+
       return newOutward;
     } catch (error) {
       await t.rollback();

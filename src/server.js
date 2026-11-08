@@ -3,6 +3,7 @@ const config = require('./config/env');
 const { sequelize, testConnection } = require('./config/database');
 const { runUp } = require('./utils/migrationRunner');
 const seedDatabase = require('./seeders/initialSeeder');
+const NotificationCleanupService = require('./services/notificationCleanup.service');
 const logger = require('./utils/logger');
 
 let server;
@@ -31,6 +32,9 @@ const startServer = async () => {
 
         // 4. Seed Initial Master Data if empty
         await seedDatabase();
+
+        // 5. Initialize 10-Day Automated Retention Cleanup Background Scheduler
+        NotificationCleanupService.initScheduler();
       } catch (dbError) {
         logger.error('[Database Initialization Error]:', dbError.message);
       }

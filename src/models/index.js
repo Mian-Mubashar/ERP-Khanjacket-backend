@@ -18,6 +18,7 @@ const Device = require('./Device');
 const AuditLog = require('./AuditLog');
 const WarehouseLocation = require('./WarehouseLocation');
 const Area = require('./Area');
+const Notification = require('./Notification');
 
 // Define Relationships
 
@@ -91,5 +92,6 @@ module.exports = {
   CustomerPayment,
   Device,
   AuditLog,
-  WarehouseLocation
+  WarehouseLocation,
+  Notification
 };

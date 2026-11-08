@@ -14,6 +14,7 @@ const deviceRoutes = require('./device.routes');
 const auditRoutes = require('./audit.routes');
 const reportRoutes = require('./report.routes');
 const backupRoutes = require('./backup.routes');
+const notificationRoutes = require('./notification.routes');
 const config = require('../config/env');
 
 const router = express.Router();
@@ -45,5 +46,6 @@ router.use('/devices', deviceRoutes);
 router.use('/audit', auditRoutes);
 router.use('/reports', reportRoutes);
 router.use('/backup', backupRoutes);
+router.use('/notifications', notificationRoutes);
 
 module.exports = router;
