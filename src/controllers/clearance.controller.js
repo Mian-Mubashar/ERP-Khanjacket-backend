@@ -46,6 +46,33 @@ class ClearanceController {
       next(error);
     }
   }
+
+  static async recordPayment(req, res, next) {
+    try {
+      const result = await ClearanceService.recordPayment(req.params.id, req.body, req.user);
+      return ApiResponse.created(res, result, 'Clearance payment recorded successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getPayments(req, res, next) {
+    try {
+      const payments = await ClearanceService.getPayments(req.params.id);
+      return ApiResponse.success(res, payments, 'Clearance payment history retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async deletePayment(req, res, next) {
+    try {
+      const result = await ClearanceService.deletePayment(req.params.paymentId, req.user);
+      return ApiResponse.success(res, result, 'Clearance payment deleted successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = ClearanceController;

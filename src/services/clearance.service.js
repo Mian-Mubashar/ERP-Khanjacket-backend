@@ -1,4 +1,4 @@
-const { ContainerClearance, Purchase } = require('../models');
+const { ContainerClearance, Purchase, ClearancePayment } = require('../models');
 const AuditService = require('./audit.service');
 const NotificationService = require('./notification.service');
 const ApiError = require('../utils/apiError');
@@ -116,6 +116,25 @@ class ClearanceService {
       }
     }
 
+    // If initial paid amount was provided, record initial payment in payments ledger
+    if (computed.paidAmount > 0) {
+      try {
+        await ClearancePayment.create({
+          id: `CPAY-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`,
+          clearanceId: id,
+          clearingAgent: clearance.clearingAgent,
+          date: clearance.billDate,
+          amount: computed.paidAmount,
+          paymentMethod: 'Bank Transfer / Initial Advance',
+          refNo: `ADV-${clearance.invoiceNo}`,
+          notes: 'Initial clearing advance payment',
+          recordedBy: currentUser?.name || 'Admin Khan'
+        });
+      } catch (err) {
+        console.error('Failed to create initial clearance payment:', err);
+      }
+    }
+
     // Audit Log
     AuditService.log({
       action: 'Container Clearance Bill Created',
@@ -167,6 +186,10 @@ class ClearanceService {
 
     return await ContainerClearance.findAll({
       where,
+      include: [
+        { model: Purchase, as: 'purchase' },
+        { model: ClearancePayment, as: 'payments' }
+      ],
       order: [['billDate', 'DESC'], ['createdAt', 'DESC']],
       limit: Number(limit),
       offset: Number(offset)
@@ -178,10 +201,126 @@ class ClearanceService {
    */
   static async getClearanceById(id) {
     const item = await ContainerClearance.findByPk(id, {
-      include: [{ model: Purchase, as: 'purchase' }]
+      include: [
+        { model: Purchase, as: 'purchase' },
+        { model: ClearancePayment, as: 'payments' }
+      ]
     });
     if (!item) throw ApiError.notFound(`Clearance bill "${id}" not found`);
     return item;
+  }
+
+  /**
+   * Record a payment (Adaigi) against a Container Clearance Bill
+   */
+  static async recordPayment(clearanceId, data, currentUser) {
+    const clearance = await ContainerClearance.findByPk(clearanceId);
+    if (!clearance) throw ApiError.notFound(`Clearance bill "${clearanceId}" not found`);
+
+    const amount = Number(data.amount);
+    if (isNaN(amount) || amount <= 0) {
+      throw ApiError.badRequest('Payment amount must be greater than 0');
+    }
+
+    const paymentId = `CPAY-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`;
+
+    const payment = await ClearancePayment.create({
+      id: paymentId,
+      clearanceId,
+      clearingAgent: clearance.clearingAgent,
+      date: data.date || new Date().toISOString().split('T')[0],
+      amount,
+      paymentMethod: data.paymentMethod || 'Bank Transfer / Wire',
+      refNo: data.refNo ? String(data.refNo).trim() : null,
+      notes: data.notes ? String(data.notes).trim() : null,
+      recordedBy: currentUser?.name || 'Admin Khan'
+    });
+
+    // Recalculate total payments made for this clearance
+    const allPayments = await ClearancePayment.findAll({ where: { clearanceId } });
+    const totalPaid = allPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const grandTotal = Number(clearance.grandTotal) || 0;
+    const remainingAmount = Math.max(0, grandTotal - totalPaid);
+    const paymentStatus = remainingAmount <= 0 ? 'Paid' : (totalPaid > 0 ? 'Partial' : 'Unpaid');
+
+    await clearance.update({
+      paidAmount: totalPaid,
+      remainingAmount,
+      paymentStatus
+    });
+
+    AuditService.log({
+      action: 'Clearance Payment Recorded',
+      category: 'Import Clearing Khata',
+      details: `Paid Rs. ${amount.toLocaleString()} to ${clearance.clearingAgent} for Bill #${clearance.invoiceNo} (Container: ${clearance.containerNumber})`,
+      impact: `New Baqaya: Rs. ${remainingAmount.toLocaleString()}`,
+      user: currentUser
+    }).catch(() => {});
+
+    NotificationService.createNotification({
+      type: 'PAYMENT',
+      category: 'WASOOLI',
+      title: 'Clearance Payment Paid',
+      message: `Paid Rs. ${amount.toLocaleString()} to ${clearance.clearingAgent} against Inv #${clearance.invoiceNo}. Remaining Due: Rs. ${remainingAmount.toLocaleString()}`,
+      referenceId: clearance.id,
+      amount
+    }).catch(() => {});
+
+    // Return updated clearance with payments
+    const updated = await this.getClearanceById(clearanceId);
+    return { payment, clearance: updated };
+  }
+
+  /**
+   * Get payments history for a clearance bill
+   */
+  static async getPayments(clearanceId) {
+    const clearance = await ContainerClearance.findByPk(clearanceId);
+    if (!clearance) throw ApiError.notFound(`Clearance bill "${clearanceId}" not found`);
+
+    return await ClearancePayment.findAll({
+      where: { clearanceId },
+      order: [['date', 'DESC'], ['createdAt', 'DESC']]
+    });
+  }
+
+  /**
+   * Delete a clearance payment entry
+   */
+  static async deletePayment(paymentId, currentUser) {
+    const payment = await ClearancePayment.findByPk(paymentId);
+    if (!payment) throw ApiError.notFound(`Payment "${paymentId}" not found`);
+
+    const clearanceId = payment.clearanceId;
+    const clearance = await ContainerClearance.findByPk(clearanceId);
+    const deletedAmount = Number(payment.amount) || 0;
+
+    await payment.destroy();
+
+    // Recalculate totals
+    if (clearance) {
+      const allPayments = await ClearancePayment.findAll({ where: { clearanceId } });
+      const totalPaid = allPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+      const grandTotal = Number(clearance.grandTotal) || 0;
+      const remainingAmount = Math.max(0, grandTotal - totalPaid);
+      const paymentStatus = remainingAmount <= 0 ? 'Paid' : (totalPaid > 0 ? 'Partial' : 'Unpaid');
+
+      await clearance.update({
+        paidAmount: totalPaid,
+        remainingAmount,
+        paymentStatus
+      });
+    }
+
+    AuditService.log({
+      action: 'Clearance Payment Deleted',
+      category: 'Import Clearing Khata',
+      details: `Reverted payment of Rs. ${deletedAmount.toLocaleString()} for Clearance #${clearance?.invoiceNo || clearanceId}`,
+      user: currentUser
+    }).catch(() => {});
+
+    const updated = clearance ? await this.getClearanceById(clearanceId) : null;
+    return { success: true, clearance: updated };
   }
 
   /**
@@ -192,6 +331,18 @@ class ClearanceService {
     if (!clearance) throw ApiError.notFound(`Clearance bill "${id}" not found`);
 
     const computed = this.computeTotals(data);
+
+    // Calculate actual payments from ledger if any exist
+    const existingPayments = await ClearancePayment.findAll({ where: { clearanceId: id } });
+    const ledgerPaid = existingPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const paidAmount = ledgerPaid > 0 ? ledgerPaid : computed.paidAmount;
+    const remainingAmount = Math.max(0, computed.grandTotal - paidAmount);
+    const paymentStatus = remainingAmount <= 0 && computed.grandTotal > 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Unpaid');
+
+    // Clean foreign keys and date values
+    const purchaseId = data.purchaseId && String(data.purchaseId).trim() ? String(data.purchaseId).trim() : null;
+    const openDate = data.openDate && String(data.openDate).trim() ? data.openDate : null;
+    const goDate = data.goDate && String(data.goDate).trim() ? data.goDate : null;
 
     await clearance.update({
       invoiceNo: data.invoiceNo ? String(data.invoiceNo).trim() : clearance.invoiceNo,
@@ -205,14 +356,37 @@ class ClearanceService {
       gdNo: data.gdNo !== undefined ? String(data.gdNo).trim() : clearance.gdNo,
       blNumber: data.blNumber !== undefined ? String(data.blNumber).trim() : clearance.blNumber,
       containerNumber: data.containerNumber ? String(data.containerNumber).trim() : clearance.containerNumber,
-      openDate: data.openDate !== undefined ? data.openDate : clearance.openDate,
-      goDate: data.goDate !== undefined ? data.goDate : clearance.goDate,
+      openDate,
+      goDate,
       billDate: data.billDate || clearance.billDate,
-      purchaseId: data.purchaseId !== undefined ? data.purchaseId : clearance.purchaseId,
+      purchaseId,
       ...computed,
+      paidAmount,
+      remainingAmount,
+      paymentStatus,
       contactPhone: data.contactPhone !== undefined ? String(data.contactPhone).trim() : clearance.contactPhone,
       notes: data.notes !== undefined ? String(data.notes).trim() : clearance.notes
     });
+
+    // Update linked China purchase if applicable
+    if (purchaseId && data.applyToPurchaseCost) {
+      try {
+        const purchase = await Purchase.findByPk(purchaseId);
+        if (purchase) {
+          const newExpenses = Number(purchase.extraExpenses || 0) + computed.totalExpenses;
+          const newTotalBill = Number(purchase.itemsSubtotal || 0) + newExpenses;
+          const newRemaining = newTotalBill - Number(purchase.paidAmount || 0);
+          await purchase.update({
+            extraExpenses: newExpenses,
+            totalBill: newTotalBill,
+            remainingAmount: newRemaining,
+            expenseNote: `Clearing: ${clearance.clearingAgent} (Inv #${clearance.invoiceNo})`
+          });
+        }
+      } catch (pErr) {
+        console.warn('[ClearanceService] Link to purchase update warning:', pErr.message);
+      }
+    }
 
     AuditService.log({
       action: 'Container Clearance Bill Updated',
@@ -222,7 +396,7 @@ class ClearanceService {
       user: currentUser
     }).catch(() => {});
 
-    return clearance;
+    return await this.getClearanceById(id);
   }
 
   /**
