@@ -37,6 +37,10 @@ const User = sequelize.define('User', {
     type: DataTypes.ENUM('Active', 'Suspended'),
     defaultValue: 'Active'
   },
+  avatar: {
+    type: DataTypes.TEXT('long'),
+    allowNull: true
+  },
   lastLogin: {
     type: DataTypes.DATE,
     allowNull: true

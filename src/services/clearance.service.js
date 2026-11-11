@@ -10,26 +10,32 @@ class ClearanceService {
    */
   static computeTotals(data) {
     const customDuty = Number(data.customDuty) || 0;
+    const shippingLineCharges = Number(data.shippingLineCharges) || 0;
+    const portPayment = Number(data.portPayment) || 0;
+    const clearanceCharges = Number(data.clearanceCharges) || 0;
+    const consigneeCharges = Number(data.consigneeCharges) || 0;
     const dryPortExpenses = Number(data.dryPortExpenses) || 0;
     const serviceCharges = Number(data.serviceCharges) || 0;
     const agencyFee = Number(data.agencyFee) || 0;
     const insCharges = Number(data.insCharges) || 0;
     const roadTransport = Number(data.roadTransport) || 0;
     const driver = Number(data.driver) || 0;
-    const consigneeCharges = Number(data.consigneeCharges) || 0;
     const craneLabour = Number(data.craneLabour) || 0;
     const railway = Number(data.railway) || 0;
     const otherExpenses = Number(data.otherExpenses) || 0;
 
     const totalDutyAmount = customDuty;
     const totalExpenses = (
+      shippingLineCharges +
+      portPayment +
+      clearanceCharges +
+      consigneeCharges +
       dryPortExpenses + 
       serviceCharges + 
       agencyFee + 
       insCharges + 
       roadTransport + 
       driver + 
-      consigneeCharges + 
       craneLabour + 
       railway + 
       otherExpenses
@@ -48,13 +54,16 @@ class ClearanceService {
 
     return {
       customDuty,
+      shippingLineCharges,
+      portPayment,
+      clearanceCharges,
+      consigneeCharges,
       dryPortExpenses,
       serviceCharges,
       agencyFee,
       insCharges,
       roadTransport,
       driver,
-      consigneeCharges,
       craneLabour,
       railway,
       otherExpenses,
@@ -332,21 +341,92 @@ class ClearanceService {
 
     const computed = this.computeTotals(data);
 
-    // Calculate actual payments from ledger if any exist
+    // Target paid amount entered by the user
+    const targetPaidAmount = data.paidAmount !== undefined 
+      ? Math.max(0, Number(data.paidAmount) || 0) 
+      : (Number(clearance.paidAmount) || 0);
+
+    const remainingAmount = Math.max(0, computed.grandTotal - targetPaidAmount);
+    const paymentStatus = remainingAmount <= 0 && computed.grandTotal > 0 
+      ? 'Paid' 
+      : (targetPaidAmount > 0 ? 'Partial' : 'Unpaid');
+
+    const currentAgent = data.clearingAgent ? String(data.clearingAgent).trim() : clearance.clearingAgent;
+    const billDate = data.billDate || clearance.billDate;
+
+    // Handle ClearancePayment ledger synchronization
     const existingPayments = await ClearancePayment.findAll({ where: { clearanceId: id } });
-    const ledgerPaid = existingPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-    const paidAmount = ledgerPaid > 0 ? ledgerPaid : computed.paidAmount;
-    const remainingAmount = Math.max(0, computed.grandTotal - paidAmount);
-    const paymentStatus = remainingAmount <= 0 && computed.grandTotal > 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Unpaid');
+
+    if (existingPayments.length === 0) {
+      if (targetPaidAmount > 0) {
+        await ClearancePayment.create({
+          id: `CPAY-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`,
+          clearanceId: id,
+          clearingAgent: currentAgent,
+          date: billDate,
+          amount: targetPaidAmount,
+          paymentMethod: 'Bank Transfer / Initial Advance',
+          refNo: `ADV-${data.invoiceNo ? String(data.invoiceNo).trim() : clearance.invoiceNo}`,
+          notes: 'Initial clearing advance payment',
+          recordedBy: currentUser?.name || 'Admin Khan'
+        });
+      }
+    } else if (existingPayments.length === 1) {
+      if (targetPaidAmount > 0) {
+        await existingPayments[0].update({
+          amount: targetPaidAmount,
+          clearingAgent: currentAgent,
+          date: billDate
+        });
+      } else {
+        await existingPayments[0].destroy();
+      }
+    } else {
+      // Multiple payment installments in ledger
+      const ledgerPaid = existingPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+      const delta = targetPaidAmount - ledgerPaid;
+
+      // Keep clearingAgent in sync across all payments
+      if (currentAgent !== clearance.clearingAgent) {
+        await ClearancePayment.update(
+          { clearingAgent: currentAgent },
+          { where: { clearanceId: id } }
+        );
+      }
+
+      if (delta !== 0) {
+        const advPayment = existingPayments.find(p => p.refNo?.startsWith('ADV-')) || existingPayments[0];
+        if (advPayment && (Number(advPayment.amount) + delta) >= 0) {
+          await advPayment.update({
+            amount: Number(advPayment.amount) + delta,
+            clearingAgent: currentAgent
+          });
+        } else if (delta > 0) {
+          await ClearancePayment.create({
+            id: `CPAY-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`,
+            clearanceId: id,
+            clearingAgent: currentAgent,
+            date: billDate,
+            amount: delta,
+            paymentMethod: 'Bank Transfer / Adjustment',
+            refNo: `ADJ-${data.invoiceNo ? String(data.invoiceNo).trim() : clearance.invoiceNo}`,
+            notes: 'Payment adjustment on bill edit',
+            recordedBy: currentUser?.name || 'Admin Khan'
+          });
+        }
+      }
+    }
 
     // Clean foreign keys and date values
     const purchaseId = data.purchaseId && String(data.purchaseId).trim() ? String(data.purchaseId).trim() : null;
     const openDate = data.openDate && String(data.openDate).trim() ? data.openDate : null;
     const goDate = data.goDate && String(data.goDate).trim() ? data.goDate : null;
 
+    const oldTotalExpenses = Number(clearance.totalExpenses || 0);
+
     await clearance.update({
       invoiceNo: data.invoiceNo ? String(data.invoiceNo).trim() : clearance.invoiceNo,
-      clearingAgent: data.clearingAgent ? String(data.clearingAgent).trim() : clearance.clearingAgent,
+      clearingAgent: currentAgent,
       consignee: data.consignee !== undefined ? String(data.consignee).trim() : clearance.consignee,
       party: data.party !== undefined ? String(data.party).trim() : clearance.party,
       agency: data.agency !== undefined ? String(data.agency).trim() : clearance.agency,
@@ -358,10 +438,10 @@ class ClearanceService {
       containerNumber: data.containerNumber ? String(data.containerNumber).trim() : clearance.containerNumber,
       openDate,
       goDate,
-      billDate: data.billDate || clearance.billDate,
+      billDate,
       purchaseId,
       ...computed,
-      paidAmount,
+      paidAmount: targetPaidAmount,
       remainingAmount,
       paymentStatus,
       contactPhone: data.contactPhone !== undefined ? String(data.contactPhone).trim() : clearance.contactPhone,
@@ -373,7 +453,8 @@ class ClearanceService {
       try {
         const purchase = await Purchase.findByPk(purchaseId);
         if (purchase) {
-          const newExpenses = Number(purchase.extraExpenses || 0) + computed.totalExpenses;
+          const deltaExpenses = computed.totalExpenses - oldTotalExpenses;
+          const newExpenses = Math.max(0, Number(purchase.extraExpenses || 0) + deltaExpenses);
           const newTotalBill = Number(purchase.itemsSubtotal || 0) + newExpenses;
           const newRemaining = newTotalBill - Number(purchase.paidAmount || 0);
           await purchase.update({
@@ -392,7 +473,7 @@ class ClearanceService {
       action: 'Container Clearance Bill Updated',
       category: 'Import Clearing',
       details: `Updated Clearance Bill #${clearance.invoiceNo} (${clearance.containerNumber})`,
-      impact: `Grand Total: Rs. ${computed.grandTotal.toLocaleString()}`,
+      impact: `Grand Total: Rs. ${computed.grandTotal.toLocaleString()} | Paid: Rs. ${targetPaidAmount.toLocaleString()} | Due: Rs. ${remainingAmount.toLocaleString()}`,
       user: currentUser
     }).catch(() => {});
 

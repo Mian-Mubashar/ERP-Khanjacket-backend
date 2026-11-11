@@ -87,6 +87,22 @@ const ContainerClearance = sequelize.define('ContainerClearance', {
     type: DataTypes.DECIMAL(14, 2),
     defaultValue: 0
   },
+  shippingLineCharges: {
+    type: DataTypes.DECIMAL(14, 2),
+    defaultValue: 0
+  },
+  portPayment: {
+    type: DataTypes.DECIMAL(14, 2),
+    defaultValue: 0
+  },
+  clearanceCharges: {
+    type: DataTypes.DECIMAL(14, 2),
+    defaultValue: 0
+  },
+  consigneeCharges: {
+    type: DataTypes.DECIMAL(14, 2),
+    defaultValue: 0
+  },
   dryPortExpenses: {
     type: DataTypes.DECIMAL(14, 2),
     defaultValue: 0
@@ -108,10 +124,6 @@ const ContainerClearance = sequelize.define('ContainerClearance', {
     defaultValue: 0
   },
   driver: {
-    type: DataTypes.DECIMAL(14, 2),
-    defaultValue: 0
-  },
-  consigneeCharges: {
     type: DataTypes.DECIMAL(14, 2),
     defaultValue: 0
   },

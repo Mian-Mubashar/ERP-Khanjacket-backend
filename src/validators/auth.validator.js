@@ -28,8 +28,16 @@ const switchRoleSchema = {
   })
 };
 
+const updateProfileSchema = {
+  body: Joi.object({
+    name: Joi.string().trim().min(2).max(100).optional(),
+    avatar: Joi.string().allow('', null).optional()
+  })
+};
+
 module.exports = {
   loginSchema,
   registerSchema,
-  switchRoleSchema
+  switchRoleSchema,
+  updateProfileSchema
 };

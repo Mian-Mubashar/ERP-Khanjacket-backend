@@ -70,6 +70,7 @@ class AuthService {
         name: user.name,
         email: user.email,
         role: user.role?.name,
+        avatar: user.avatar,
         permissions
       }
     };
@@ -156,6 +157,7 @@ class AuthService {
         name: updatedUser.name,
         email: updatedUser.email,
         role: updatedUser.role.name,
+        avatar: updatedUser.avatar,
         permissions
       }
     };
@@ -186,6 +188,54 @@ class AuthService {
       name: user.name,
       email: user.email,
       role: user.role?.name,
+      avatar: user.avatar,
+      permissions
+    };
+  }
+
+  /**
+   * Update user profile (Name and Avatar)
+   */
+  static async updateProfile(userId, { name, avatar }, currentUser) {
+    const user = await User.findByPk(userId, {
+      include: [
+        {
+          model: Role,
+          as: 'role',
+          include: [{ model: Permission, as: 'permissions', attributes: ['name'] }]
+        }
+      ]
+    });
+
+    if (!user) {
+      throw ApiError.notFound('User not found');
+    }
+
+    if (name && typeof name === 'string' && name.trim()) {
+      user.name = name.trim();
+    }
+    if (avatar !== undefined) {
+      user.avatar = avatar;
+    }
+
+    await user.save();
+
+    const permissions = user.role?.permissions?.map(p => p.name) || [];
+
+    await AuditService.log({
+      action: 'Profile Updated',
+      category: 'Security & Access',
+      details: `Profile updated for ${user.name}`,
+      impact: 'Name or avatar updated',
+      user: currentUser
+    });
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role?.name,
+      avatar: user.avatar,
       permissions
     };
   }
