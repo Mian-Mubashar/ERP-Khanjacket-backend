@@ -65,6 +65,15 @@ class ClearanceController {
     }
   }
 
+  static async updatePayment(req, res, next) {
+    try {
+      const result = await ClearanceService.updatePayment(req.params.paymentId, req.body, req.user);
+      return ApiResponse.success(res, result, 'Clearance payment updated successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async deletePayment(req, res, next) {
     try {
       const result = await ClearanceService.deletePayment(req.params.paymentId, req.user);

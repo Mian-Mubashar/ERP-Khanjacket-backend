@@ -1,4 +1,4 @@
-const { sequelize, Customer, CustomerPayment, Outward, City } = require('../models');
+const { sequelize, Customer, CustomerPayment, Outward, City, CustomerReturn } = require('../models');
 const ApiError = require('../utils/apiError');
 const AuditService = require('./audit.service');
 
@@ -35,8 +35,9 @@ class CustomerService {
   static async getCustomerById(id) {
     const customer = await Customer.findByPk(id, {
       include: [
-        { model: Outward, as: 'dispatches', limit: 20, order: [['date', 'DESC']] },
-        { model: CustomerPayment, as: 'payments', limit: 20, order: [['date', 'DESC']] }
+        { model: Outward, as: 'dispatches', limit: 50, order: [['date', 'DESC']] },
+        { model: CustomerPayment, as: 'payments', limit: 50, order: [['date', 'DESC']] },
+        { model: CustomerReturn, as: 'returns', limit: 50, order: [['date', 'DESC']] }
       ]
     });
 

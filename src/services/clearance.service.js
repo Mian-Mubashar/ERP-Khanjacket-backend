@@ -333,6 +333,52 @@ class ClearanceService {
   }
 
   /**
+   * Update a clearance payment entry
+   */
+  static async updatePayment(paymentId, data, currentUser) {
+    const payment = await ClearancePayment.findByPk(paymentId);
+    if (!payment) throw ApiError.notFound(`Payment "${paymentId}" not found`);
+
+    const clearanceId = payment.clearanceId;
+    const clearance = await ContainerClearance.findByPk(clearanceId);
+    const oldAmount = Number(payment.amount) || 0;
+    const newAmount = data.amount !== undefined ? Math.max(0, Number(data.amount) || 0) : oldAmount;
+
+    await payment.update({
+      amount: newAmount,
+      date: data.date || payment.date,
+      paymentMethod: data.paymentMethod || payment.paymentMethod,
+      refNo: data.refNo !== undefined ? data.refNo : payment.refNo,
+      notes: data.notes !== undefined ? data.notes : payment.notes
+    });
+
+    // Recalculate totals
+    if (clearance) {
+      const allPayments = await ClearancePayment.findAll({ where: { clearanceId } });
+      const totalPaid = allPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+      const grandTotal = Number(clearance.grandTotal) || 0;
+      const remainingAmount = Math.max(0, grandTotal - totalPaid);
+      const paymentStatus = remainingAmount <= 0 && grandTotal > 0 ? 'Paid' : (totalPaid > 0 ? 'Partial' : 'Unpaid');
+
+      await clearance.update({
+        paidAmount: totalPaid,
+        remainingAmount,
+        paymentStatus
+      });
+    }
+
+    AuditService.log({
+      action: 'Clearance Payment Updated',
+      category: 'Import Clearing Khata',
+      details: `Updated payment of Rs. ${newAmount.toLocaleString()} (was Rs. ${oldAmount.toLocaleString()}) for Clearance #${clearance?.invoiceNo || clearanceId}`,
+      user: currentUser
+    }).catch(() => {});
+
+    const updated = clearance ? await this.getClearanceById(clearanceId) : null;
+    return { success: true, payment, clearance: updated };
+  }
+
+  /**
    * Update clearance bill
    */
   static async updateClearance(id, data, currentUser) {

@@ -15,6 +15,7 @@ router.delete('/:id', ClearanceController.delete);
 // Payment endpoints (Khata Adaigi)
 router.post('/:id/payments', ClearanceController.recordPayment);
 router.get('/:id/payments', ClearanceController.getPayments);
+router.put('/payments/:paymentId', ClearanceController.updatePayment);
 router.delete('/payments/:paymentId', ClearanceController.deletePayment);
 
 module.exports = router;
