@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const { Notification } = require('../models');
 const NotificationCleanupService = require('./notificationCleanup.service');
+const PushNotificationService = require('./pushNotification.service');
 const logger = require('../utils/logger');
 
 class NotificationService {
@@ -34,6 +35,23 @@ class NotificationService {
         amount: Number(amount) || 0,
         urgency,
         metadata: metadata ? (typeof metadata === 'object' ? JSON.stringify(metadata) : metadata) : null
+      });
+
+      // Trigger real-time background Push Notification to registered mobile devices (Android + iOS)
+      PushNotificationService.broadcastPushNotification({
+        title,
+        body: message,
+        data: {
+          notificationId: id,
+          type,
+          referenceId: referenceId || '',
+          city: city || '',
+          customerName: customerName || '',
+          amount: String(amount || 0)
+        },
+        urgency
+      }).catch(err => {
+        logger.error('[NotificationService] Push broadcast background error:', err.message);
       });
 
       return notif;

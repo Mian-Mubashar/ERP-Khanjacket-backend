@@ -52,6 +52,21 @@ const config = {
     name: process.env.DEFAULT_ADMIN_NAME || 'Admin Khan',
     email: process.env.DEFAULT_ADMIN_EMAIL || 'admin@khanclothes.com',
     password: process.env.DEFAULT_ADMIN_PASSWORD || 'admin123'
+  },
+
+  pushNotifications: {
+    firebaseServiceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './serviceAccountKey.json',
+    firebaseProjectId: process.env.FIREBASE_PROJECT_ID || 'khan-warehouse-app',
+    firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
+    firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY || '',
+    appleApns: {
+      enabled: process.env.APPLE_APNS_ENABLED === 'true',
+      keyId: process.env.APPLE_APNS_KEY_ID || '',
+      teamId: process.env.APPLE_APNS_TEAM_ID || '',
+      bundleId: process.env.APPLE_APNS_BUNDLE_ID || 'com.warehouseapp',
+      p8Path: process.env.APPLE_APNS_P8_PATH || '',
+      isProduction: process.env.APPLE_APNS_PRODUCTION === 'true'
+    }
   }
 };
 

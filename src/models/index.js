@@ -22,8 +22,13 @@ const Notification = require('./Notification');
 const ContainerClearance = require('./ContainerClearance');
 const ClearancePayment = require('./ClearancePayment');
 const CustomerReturn = require('./CustomerReturn');
+const DevicePushToken = require('./DevicePushToken');
 
 // Define Relationships
+
+// User <-> DevicePushToken (1:N)
+User.hasMany(DevicePushToken, { foreignKey: 'userId', as: 'pushTokens' });
+DevicePushToken.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
 // Role <-> User (1:N)
 Role.hasMany(User, { foreignKey: 'roleId', as: 'users' });
@@ -115,5 +120,6 @@ module.exports = {
   Notification,
   ContainerClearance,
   ClearancePayment,
-  CustomerReturn
+  CustomerReturn,
+  DevicePushToken
 };
