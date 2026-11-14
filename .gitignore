@@ -12,6 +12,7 @@
 serviceAccountKey.json
 *serviceAccount*.json
 *firebase-adminsdk*.json
+!serviceAccountKey.example.json
 
 # Apple APNs & SSL Keys / Certificates
 *.pem
