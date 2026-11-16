@@ -100,10 +100,47 @@ class SupplierService {
       }
 
       const payAmt = Number(paymentData.amount);
-      const newPayId = `PAY-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`;
+      if (!payAmt || payAmt <= 0) {
+        throw ApiError.badRequest('Payment amount must be greater than zero');
+      }
+
       const date = paymentData.date || new Date().toISOString().split('T')[0];
       const method = paymentData.paymentMethod || 'Bank TT / Wire Transfer';
-      const refNo = paymentData.refNo || `REF-${Date.now().toString().slice(-4)}`;
+      const refNo = paymentData.refNo ? String(paymentData.refNo).trim() : `REF-${Date.now().toString().slice(-4)}`;
+
+      // Anti-duplicate protection:
+      // If the exact same payment was already recorded within the last 5 seconds (or with the same refNo for this supplier),
+      // return the existing payment gracefully to prevent double-deduction.
+      const { Op } = require('sequelize');
+      const duplicateConditions = [
+        {
+          supplierId: supplier.id,
+          amount: payAmt,
+          createdAt: {
+            [Op.gte]: new Date(Date.now() - 5000)
+          }
+        }
+      ];
+      if (refNo) {
+        duplicateConditions.push({
+          supplierId: supplier.id,
+          refNo: refNo
+        });
+      }
+
+      const existingRecentPayment = await SupplierPayment.findOne({
+        where: {
+          [Op.or]: duplicateConditions
+        },
+        transaction: t
+      });
+
+      if (existingRecentPayment) {
+        await t.rollback();
+        return existingRecentPayment;
+      }
+
+      const newPayId = `PAY-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`;
 
       // 1. Create Payment Record
       const newPayment = await SupplierPayment.create({
