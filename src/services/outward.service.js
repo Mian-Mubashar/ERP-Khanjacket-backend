@@ -64,9 +64,36 @@ class OutwardService {
       const paidAmount = Number(outwardData.paidAmount) || 0;
       const netBalanceAddition = totalSaleAmount - paidAmount;
       const newId = `OUT-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`;
-      const challanNo = outwardData.challanNo || `CH-${Date.now().toString().slice(-4)}`;
+      const challanNo = outwardData.challanNo ? outwardData.challanNo.trim() : `CH-${Date.now().toString().slice(-4)}`;
       const gatePassNo = outwardData.gatePassNo || `GP-${Date.now().toString().slice(-3)}`;
       const date = outwardData.date || new Date().toISOString().split('T')[0];
+
+      // Anti-duplicate protection:
+      // If the exact same dispatch was submitted within the last 5 seconds (or with the same challanNo),
+      // return the existing record gracefully to avoid duplicate deductions.
+      const { Op } = require('sequelize');
+      const duplicateConditions = [];
+      if (outwardData.challanNo) {
+        duplicateConditions.push({ challanNo: challanNo });
+      }
+      duplicateConditions.push({
+        articleNo: article.articleNo,
+        quantity: reqQty,
+        unitSalePrice,
+        customerName: (outwardData.customerName || '').trim(),
+        destination: (outwardData.destination || '').trim(),
+        createdAt: { [Op.gte]: new Date(Date.now() - 5000) }
+      });
+
+      const existingRecentOutward = await Outward.findOne({
+        where: { [Op.or]: duplicateConditions },
+        transaction: t
+      });
+
+      if (existingRecentOutward) {
+        await t.rollback();
+        return existingRecentOutward;
+      }
 
       // 2. Create Outward Record
       const newOutward = await Outward.create({

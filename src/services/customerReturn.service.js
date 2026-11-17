@@ -60,7 +60,33 @@ class CustomerReturnService {
       const date = data.date || new Date().toISOString().split('T')[0];
 
       const returnId = `RET-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`;
-      const returnSlipNo = data.returnSlipNo || `MW-${Date.now().toString().slice(-4)}`;
+      const returnSlipNo = data.returnSlipNo ? data.returnSlipNo.trim() : `MW-${Date.now().toString().slice(-4)}`;
+
+      // Anti-duplicate protection:
+      // If the exact same return slip or identical return was submitted within the last 5 seconds,
+      // return the existing return to prevent duplicate khata deductions or double restock.
+      const { Op } = require('sequelize');
+      const duplicateConditions = [];
+      if (data.returnSlipNo) {
+        duplicateConditions.push({ returnSlipNo: returnSlipNo });
+      }
+      duplicateConditions.push({
+        customerId: customer.id,
+        articleNo: article.articleNo,
+        quantity,
+        totalAmount,
+        createdAt: { [Op.gte]: new Date(Date.now() - 5000) }
+      });
+
+      const existingRecentReturn = await CustomerReturn.findOne({
+        where: { [Op.or]: duplicateConditions },
+        transaction: t
+      });
+
+      if (existingRecentReturn) {
+        await t.rollback();
+        return existingRecentReturn;
+      }
 
       // 1. Create Return Record
       const newReturn = await CustomerReturn.create({

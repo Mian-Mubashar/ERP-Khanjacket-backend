@@ -76,6 +76,32 @@ class PurchaseService {
         throw ApiError.badRequest(`Supplier with ID "${purchaseData.supplierId}" not found in database`);
       }
 
+      // Anti-duplicate protection:
+      // If the exact same purchase bill was submitted within the last 5 seconds (or with the same invoiceNo),
+      // return the existing purchase record with items to prevent double stock increment / double balance.
+      const { Op } = require('sequelize');
+      const duplicateConditions = [];
+      const invoiceNoTrimmed = purchaseData.invoiceNo ? purchaseData.invoiceNo.trim() : '';
+      if (invoiceNoTrimmed) {
+        duplicateConditions.push({ invoiceNo: invoiceNoTrimmed });
+      }
+      duplicateConditions.push({
+        supplierId: purchaseData.supplierId,
+        totalBill,
+        createdAt: { [Op.gte]: new Date(Date.now() - 5000) }
+      });
+
+      const existingRecentPurchase = await Purchase.findOne({
+        where: { [Op.or]: duplicateConditions },
+        include: [{ model: PurchaseItem, as: 'items' }],
+        transaction: t
+      });
+
+      if (existingRecentPurchase) {
+        await t.rollback();
+        return existingRecentPurchase;
+      }
+
       // 3. Create Purchase Record
       const newPurchase = await Purchase.create({
         id: newId,
