@@ -74,7 +74,7 @@ const seedDatabase = async () => {
       }
     }
 
-    // 4. Seed Default Users
+    // 4. Seed Default Users from Environment Configuration
     const defaultUsers = [
       {
         name: config.defaultAdmin.name,
@@ -83,15 +83,15 @@ const seedDatabase = async () => {
         roleId: roleMap[ROLES.ADMIN].id
       },
       {
-        name: 'Tariq Mehmood (Staff)',
-        email: 'staff@khanclothes.com',
-        password: 'staff123',
+        name: config.defaultStaff.name,
+        email: config.defaultStaff.email,
+        password: config.defaultStaff.password,
         roleId: roleMap[ROLES.STAFF].id
       },
       {
-        name: 'Asim Bilal (Auditor)',
-        email: 'viewer@khanclothes.com',
-        password: 'viewer123',
+        name: config.defaultViewer.name,
+        email: config.defaultViewer.email,
+        password: config.defaultViewer.password,
         roleId: roleMap[ROLES.VIEWER].id
       }
     ];

@@ -53,6 +53,18 @@ const config = {
     password: process.env.DEFAULT_ADMIN_PASSWORD || 'admin123'
   },
 
+  defaultStaff: {
+    name: process.env.DEFAULT_STAFF_NAME || 'Tariq Mehmood (Staff)',
+    email: process.env.DEFAULT_STAFF_EMAIL || 'staff@khanclothes.com',
+    password: process.env.DEFAULT_STAFF_PASSWORD || 'staff123'
+  },
+
+  defaultViewer: {
+    name: process.env.DEFAULT_VIEWER_NAME || 'Asim Bilal (Auditor)',
+    email: process.env.DEFAULT_VIEWER_EMAIL || 'viewer@khanclothes.com',
+    password: process.env.DEFAULT_VIEWER_PASSWORD || 'viewer123'
+  },
+
   pushNotifications: {
     firebaseServiceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './serviceAccountKey.json',
     firebaseProjectId: process.env.FIREBASE_PROJECT_ID || 'khan-warehouse-app',
