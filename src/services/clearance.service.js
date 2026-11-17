@@ -99,31 +99,11 @@ class ClearanceService {
       openDate: data.openDate || null,
       goDate: data.goDate || null,
       billDate: data.billDate || new Date().toISOString().split('T')[0],
-      purchaseId: data.purchaseId || null,
+      purchaseId: null,
       ...computed,
       contactPhone: (data.contactPhone || '03349191961').trim(),
       notes: (data.notes || '').trim()
     });
-
-    // If attached to a China Purchase, update its extraExpenses if requested
-    if (data.purchaseId && data.applyToPurchaseCost) {
-      try {
-        const purchase = await Purchase.findByPk(data.purchaseId);
-        if (purchase) {
-          const newExpenses = Number(purchase.extraExpenses || 0) + computed.totalExpenses;
-          const newTotalBill = Number(purchase.itemsSubtotal || 0) + newExpenses;
-          const newRemaining = newTotalBill - Number(purchase.paidAmount || 0);
-          await purchase.update({
-            extraExpenses: newExpenses,
-            totalBill: newTotalBill,
-            remainingAmount: newRemaining,
-            expenseNote: `Clearing: ${clearance.clearingAgent} (Inv #${clearance.invoiceNo})`
-          });
-        }
-      } catch (pErr) {
-        console.warn('[ClearanceService] Link to purchase update warning:', pErr.message);
-      }
-    }
 
     // If initial paid amount was provided, record initial payment in payments ledger
     if (computed.paidAmount > 0) {
@@ -493,27 +473,6 @@ class ClearanceService {
       contactPhone: data.contactPhone !== undefined ? String(data.contactPhone).trim() : clearance.contactPhone,
       notes: data.notes !== undefined ? String(data.notes).trim() : clearance.notes
     });
-
-    // Update linked China purchase if applicable
-    if (purchaseId && data.applyToPurchaseCost) {
-      try {
-        const purchase = await Purchase.findByPk(purchaseId);
-        if (purchase) {
-          const deltaExpenses = computed.totalExpenses - oldTotalExpenses;
-          const newExpenses = Math.max(0, Number(purchase.extraExpenses || 0) + deltaExpenses);
-          const newTotalBill = Number(purchase.itemsSubtotal || 0) + newExpenses;
-          const newRemaining = newTotalBill - Number(purchase.paidAmount || 0);
-          await purchase.update({
-            extraExpenses: newExpenses,
-            totalBill: newTotalBill,
-            remainingAmount: newRemaining,
-            expenseNote: `Clearing: ${clearance.clearingAgent} (Inv #${clearance.invoiceNo})`
-          });
-        }
-      } catch (pErr) {
-        console.warn('[ClearanceService] Link to purchase update warning:', pErr.message);
-      }
-    }
 
     AuditService.log({
       action: 'Container Clearance Bill Updated',
