@@ -33,7 +33,7 @@ class AuthController {
 
   static async getMe(req, res, next) {
     try {
-      const user = await AuthService.getMe(req.user.id);
+      const user = await AuthService.getMe(req.user.id, req.user);
       return ApiResponse.success(res, user, 'Profile retrieved');
     } catch (error) {
       next(error);

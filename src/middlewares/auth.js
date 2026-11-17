@@ -53,14 +53,31 @@ const authenticate = async (req, res, next) => {
       return next(ApiError.forbidden('Your account has been suspended. Please contact administrator.'));
     }
 
-    const permissionNames = user.role?.permissions?.map(p => p.name) || [];
+    const isOriginalAdmin = user.email.toLowerCase() === config.defaultAdmin.email.toLowerCase() || user.role?.name === 'Admin';
+    let effectiveRoleName = user.role?.name || 'Viewer';
+    let permissionNames = user.role?.permissions?.map(p => p.name) || [];
+
+    // If original admin is previewing another role (Staff or Viewer) via active token
+    if (isOriginalAdmin && decoded.role && decoded.role !== user.role?.name) {
+      const previewRole = await Role.findOne({
+        where: { name: decoded.role },
+        include: [{ model: Permission, as: 'permissions', attributes: ['name'] }]
+      });
+      if (previewRole) {
+        effectiveRoleName = previewRole.name;
+        permissionNames = previewRole.permissions?.map(p => p.name) || [];
+      }
+    }
 
     // Attach user to request
     req.user = {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role?.name || 'Viewer',
+      role: effectiveRoleName,
+      baseRole: isOriginalAdmin ? 'Admin' : (user.role?.name || 'Viewer'),
+      isOriginalAdmin,
+      avatar: user.avatar,
       permissions: permissionNames
     };
 

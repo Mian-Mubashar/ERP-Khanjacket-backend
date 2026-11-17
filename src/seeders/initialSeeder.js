@@ -100,6 +100,23 @@ const seedDatabase = async () => {
       const existing = await User.findOne({ where: { email: u.email } });
       if (!existing) {
         await User.create(u);
+      } else {
+        let needsUpdate = false;
+        if (existing.roleId !== u.roleId) {
+          existing.roleId = u.roleId;
+          needsUpdate = true;
+        }
+        if (existing.name !== u.name) {
+          existing.name = u.name;
+          needsUpdate = true;
+        }
+        if (u.password && !(await existing.comparePassword(u.password))) {
+          existing.password = u.password;
+          needsUpdate = true;
+        }
+        if (needsUpdate) {
+          await existing.save();
+        }
       }
     }
 

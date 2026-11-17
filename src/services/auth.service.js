@@ -8,12 +8,16 @@ class AuthService {
   /**
    * Generate JWT Token
    */
-  static generateToken(user) {
+  static generateToken(user, overrideRole = null) {
+    const isOriginalAdmin = user.email.toLowerCase() === config.defaultAdmin.email.toLowerCase() || user.role?.name === 'Admin';
+    const activeRole = overrideRole || user.role?.name || 'Viewer';
     return jwt.sign(
       {
         id: user.id,
         email: user.email,
-        role: user.role?.name
+        role: activeRole,
+        baseRole: isOriginalAdmin ? 'Admin' : (user.role?.name || 'Viewer'),
+        isOriginalAdmin
       },
       config.jwt.secret,
       { expiresIn: config.jwt.expiresIn }
@@ -48,11 +52,34 @@ class AuthService {
       throw ApiError.unauthorized('Invalid email or password');
     }
 
+    // Always guarantee that default accounts have their true designated base role restored on login
+    const isDefaultAdmin = user.email.toLowerCase() === config.defaultAdmin.email.toLowerCase();
+    const isDefaultStaff = user.email.toLowerCase() === config.defaultStaff.email.toLowerCase();
+    const isDefaultViewer = user.email.toLowerCase() === config.defaultViewer.email.toLowerCase();
+
+    let targetRoleName = null;
+    if (isDefaultAdmin) targetRoleName = 'Admin';
+    else if (isDefaultStaff) targetRoleName = 'Staff';
+    else if (isDefaultViewer) targetRoleName = 'Viewer';
+
+    if (targetRoleName && user.role?.name !== targetRoleName) {
+      const targetRole = await Role.findOne({
+        where: { name: targetRoleName },
+        include: [{ model: Permission, as: 'permissions', attributes: ['name'] }]
+      });
+      if (targetRole) {
+        user.roleId = targetRole.id;
+        user.role = targetRole;
+        await user.save();
+      }
+    }
+
     // Update last login
     user.lastLogin = new Date();
     await user.save();
 
-    const token = this.generateToken(user);
+    const isOriginalAdmin = user.email.toLowerCase() === config.defaultAdmin.email.toLowerCase() || user.role?.name === 'Admin';
+    const token = this.generateToken(user, user.role?.name);
     const permissions = user.role?.permissions?.map(p => p.name) || [];
 
     await AuditService.log({
@@ -70,6 +97,8 @@ class AuthService {
         name: user.name,
         email: user.email,
         role: user.role?.name,
+        baseRole: isOriginalAdmin ? 'Admin' : (user.role?.name || 'Viewer'),
+        isOriginalAdmin,
         avatar: user.avatar,
         permissions
       }
@@ -109,9 +138,19 @@ class AuthService {
   }
 
   /**
-   * Switch user role (demo/convenience endpoint)
+   * Switch user role (demo/convenience endpoint for previewing access levels)
    */
   static async switchRole(userId, newRoleName, currentUser) {
+    const isAuthorizedAdmin = 
+      currentUser?.isOriginalAdmin || 
+      currentUser?.baseRole?.toLowerCase() === 'admin' || 
+      currentUser?.role?.toLowerCase() === 'admin' || 
+      currentUser?.email?.toLowerCase() === config.defaultAdmin.email.toLowerCase();
+
+    if (!isAuthorizedAdmin) {
+      throw ApiError.forbidden('Only administrators are authorized to switch preview roles.');
+    }
+
     const roleRecord = await Role.findOne({
       where: { name: newRoleName },
       include: [{ model: Permission, as: 'permissions', attributes: ['name'] }]
@@ -121,52 +160,6 @@ class AuthService {
       throw ApiError.badRequest(`Role "${newRoleName}" is invalid`);
     }
 
-    const user = await User.findByPk(userId);
-    if (!user) {
-      throw ApiError.notFound('User not found');
-    }
-
-    user.roleId = roleRecord.id;
-    await user.save();
-
-    const updatedUser = await User.findByPk(userId, {
-      include: [
-        {
-          model: Role,
-          as: 'role',
-          include: [{ model: Permission, as: 'permissions', attributes: ['name'] }]
-        }
-      ]
-    });
-
-    const token = this.generateToken(updatedUser);
-    const permissions = roleRecord.permissions?.map(p => p.name) || [];
-
-    await AuditService.log({
-      action: 'Role Switched',
-      category: 'Security & Access',
-      details: `Changed role for ${user.name} to ${newRoleName}`,
-      impact: `Privileges updated to: ${newRoleName}`,
-      user: currentUser
-    });
-
-    return {
-      token,
-      user: {
-        id: updatedUser.id,
-        name: updatedUser.name,
-        email: updatedUser.email,
-        role: updatedUser.role.name,
-        avatar: updatedUser.avatar,
-        permissions
-      }
-    };
-  }
-
-  /**
-   * Fetch current user info with permissions
-   */
-  static async getMe(userId) {
     const user = await User.findByPk(userId, {
       include: [
         {
@@ -181,13 +174,84 @@ class AuthService {
       throw ApiError.notFound('User not found');
     }
 
-    const permissions = user.role?.permissions?.map(p => p.name) || [];
+    // Protect dedicated staff and viewer credentials from having their roles altered
+    if (user.email === config.defaultStaff.email || user.email === config.defaultViewer.email) {
+      throw ApiError.forbidden('Default staff and viewer account roles cannot be altered. Log in directly with the appropriate credentials.');
+    }
+
+    // Default admin account's role in MySQL is NEVER downgraded so they never get trapped!
+    // Instead, a session preview token is generated for the new preview role.
+    const isDefaultAdmin = user.email.toLowerCase() === config.defaultAdmin.email.toLowerCase();
+    if (!isDefaultAdmin) {
+      user.roleId = roleRecord.id;
+      await user.save();
+    }
+
+    const token = this.generateToken(user, newRoleName);
+    const permissions = roleRecord.permissions?.map(p => p.name) || [];
+
+    await AuditService.log({
+      action: 'Role Switched (Preview)',
+      category: 'Security & Access',
+      details: `Admin ${user.name} switched view to ${newRoleName}`,
+      impact: `Session privileges previewing: ${newRoleName}`,
+      user: currentUser
+    });
+
+    return {
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: newRoleName,
+        baseRole: 'Admin',
+        isOriginalAdmin: true,
+        avatar: user.avatar,
+        permissions
+      }
+    };
+  }
+
+  /**
+   * Fetch current user info with permissions (supports preview role for Admin)
+   */
+  static async getMe(userId, requestingUser = null) {
+    const user = await User.findByPk(userId, {
+      include: [
+        {
+          model: Role,
+          as: 'role',
+          include: [{ model: Permission, as: 'permissions', attributes: ['name'] }]
+        }
+      ]
+    });
+
+    if (!user) {
+      throw ApiError.notFound('User not found');
+    }
+
+    const isOriginalAdmin = user.email.toLowerCase() === config.defaultAdmin.email.toLowerCase() || user.role?.name === 'Admin';
+    const effectiveRole = (isOriginalAdmin && requestingUser?.role) ? requestingUser.role : (user.role?.name || 'Viewer');
+
+    let permissions = user.role?.permissions?.map(p => p.name) || [];
+    if (isOriginalAdmin && effectiveRole !== user.role?.name) {
+      const previewRole = await Role.findOne({
+        where: { name: effectiveRole },
+        include: [{ model: Permission, as: 'permissions', attributes: ['name'] }]
+      });
+      if (previewRole) {
+        permissions = previewRole.permissions?.map(p => p.name) || [];
+      }
+    }
 
     return {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role?.name,
+      role: effectiveRole,
+      baseRole: isOriginalAdmin ? 'Admin' : (user.role?.name || 'Viewer'),
+      isOriginalAdmin,
       avatar: user.avatar,
       permissions
     };
