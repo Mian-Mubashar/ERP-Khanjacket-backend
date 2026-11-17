@@ -1,5 +1,4 @@
 const { Device } = require('../models');
-const config = require('../config/env');
 const ApiError = require('../utils/apiError');
 const AuditService = require('./audit.service');
 
@@ -15,19 +14,8 @@ class DeviceService {
 
   /**
    * Authorize a new mobile device
-   * Supports unlimited devices (or configurable via MAX_AUTHORIZED_DEVICES)
    */
   static async addDevice(deviceData, currentUser) {
-    const totalAuthorized = await Device.count({ where: { status: 'Authorized' } });
-    const maxLimit = config.security.maxAuthorizedDevices;
-
-    // Only enforce limit if a positive number is explicitly configured (0 = unlimited)
-    if (maxLimit && maxLimit > 0 && totalAuthorized >= maxLimit) {
-      throw ApiError.badRequest(
-        `Hardware Authorization Limit Reached! Maximum ${maxLimit} mobile phones are permitted per policy. Revoke an unused mobile before registering a new one.`
-      );
-    }
-
     const devices = await Device.findAll({ attributes: ['id'] });
     let maxNum = 0;
     devices.forEach(d => {
@@ -61,7 +49,7 @@ class DeviceService {
       action: 'New Device Authorized',
       category: 'Security & Access',
       details: `Authorized mobile "${newDevice.deviceName}" (${newDevice.model}) for staff member "${newDevice.owner}"`,
-      impact: `Hardware units authorized: ${totalAuthorized + 1}${maxLimit && maxLimit > 0 ? ` / ${maxLimit}` : ' (Unlimited Devices Enabled)'}`,
+      impact: `Authorized device added to security registry`,
       user: currentUser
     });
 
@@ -78,20 +66,6 @@ class DeviceService {
     }
 
     const newStatus = device.status === 'Authorized' ? 'Revoked' : 'Authorized';
-
-    // If re-authorizing, check limit if a positive limit is configured
-    if (newStatus === 'Authorized') {
-      const maxLimit = config.security.maxAuthorizedDevices;
-      if (maxLimit && maxLimit > 0) {
-        const activeCount = await Device.count({ where: { status: 'Authorized' } });
-        if (activeCount >= maxLimit) {
-          throw ApiError.badRequest(
-            `Cannot authorize device. Maximum limit of ${maxLimit} active hardware units reached.`
-          );
-        }
-      }
-    }
-
     device.status = newStatus;
     await device.save();
 

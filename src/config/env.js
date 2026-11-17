@@ -44,8 +44,7 @@ const config = {
     rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,
     rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10) || 500,
     authRateLimitWindowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,
-    authRateLimitMax: parseInt(process.env.AUTH_RATE_LIMIT_MAX_ATTEMPTS, 10) || 20,
-    maxAuthorizedDevices: process.env.MAX_AUTHORIZED_DEVICES !== undefined ? parseInt(process.env.MAX_AUTHORIZED_DEVICES, 10) : 0 // 0 = Unlimited devices
+    authRateLimitMax: parseInt(process.env.AUTH_RATE_LIMIT_MAX_ATTEMPTS, 10) || 20
   },
 
   defaultAdmin: {
