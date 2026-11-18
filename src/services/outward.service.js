@@ -160,10 +160,16 @@ class OutwardService {
         // If upfront payment was made with this dispatch, record CustomerPayment receipt
         if (paidAmount > 0) {
           const newPayId = `CPAY-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`;
+          const custShop = (customerRecord.shopName || '').trim();
+          const custOwner = (customerRecord.shopkeeperName || '').trim();
+          const formattedCustName = (custShop && custOwner && custShop.toLowerCase() !== custOwner.toLowerCase())
+            ? `${custShop} (${custOwner})`
+            : (custShop || custOwner || 'Customer');
+
           await CustomerPayment.create({
             id: newPayId,
             customerId: customerRecord.id,
-            customerName: `${customerRecord.shopName} (${customerRecord.shopkeeperName || ''})`,
+            customerName: formattedCustName,
             city: customerRecord.city,
             date,
             amount: paidAmount,

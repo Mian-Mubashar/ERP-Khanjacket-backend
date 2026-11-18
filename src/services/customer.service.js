@@ -284,12 +284,17 @@ class CustomerService {
       }
 
       const newPayId = `CPAY-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`;
+      const custShop = (customer.shopName || '').trim();
+      const custOwner = (customer.shopkeeperName || '').trim();
+      const formattedCustName = (custShop && custOwner && custShop.toLowerCase() !== custOwner.toLowerCase())
+        ? `${custShop} (${custOwner})`
+        : (custShop || custOwner || 'Customer');
 
       // 1. Create CustomerPayment
       const newPayment = await CustomerPayment.create({
         id: newPayId,
         customerId: customer.id,
-        customerName: `${customer.shopName} (${customer.shopkeeperName || ''})`,
+        customerName: formattedCustName,
         city: customer.city,
         date,
         amount: payAmt,
@@ -328,7 +333,7 @@ class CustomerService {
           category: 'Wasooli',
           referenceId: refNo,
           city: customer.city || '',
-          customerName: `${customer.shopName} (${customer.shopkeeperName || ''})`,
+          customerName: formattedCustName,
           amount: payAmt,
           urgency: 'success'
         }).catch(() => {});
