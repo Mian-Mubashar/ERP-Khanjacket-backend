@@ -39,6 +39,10 @@ const Customer = sequelize.define('Customer', {
     type: DataTypes.INTEGER,
     defaultValue: 0
   },
+  openingBalance: {
+    type: DataTypes.DECIMAL(14, 2),
+    defaultValue: 0
+  },
   totalBill: {
     type: DataTypes.DECIMAL(14, 2),
     defaultValue: 0

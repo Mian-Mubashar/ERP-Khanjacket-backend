@@ -23,9 +23,17 @@ class CustomerService {
       ];
     }
 
-    return await Customer.findAll({
+    const customers = await Customer.findAll({
       where,
       order: [['shopName', 'ASC']]
+    });
+
+    return customers.map(c => {
+      const obj = c.toJSON ? c.toJSON() : { ...c };
+      if (obj.openingBalance === undefined || obj.openingBalance === null) {
+        obj.openingBalance = Math.max(0, Number(obj.totalBill || 0));
+      }
+      return obj;
     });
   }
 
@@ -82,6 +90,7 @@ class CustomerService {
         phone: custData.phone?.trim() || '',
         phone2: custData.phone2?.trim() || '',
         totalPiecesReceived: 0,
+        openingBalance: opening,
         totalBill: opening,
         totalPaid: 0,
         remainingBalance: opening,
@@ -130,14 +139,16 @@ class CustomerService {
       const newOpening = Math.max(0, Number(data.openingBalance) || 0);
       const dispatches = await Outward.findAll({ where: { customerId: id } });
       const payments = await CustomerPayment.findAll({ where: { customerId: id } });
+      const returns = await CustomerReturn.findAll({ where: { customerId: id } });
 
       const totalBilled = dispatches.reduce((s, d) => s + (Number(d.totalSaleAmount) || 0), 0);
       const totalPaid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+      const totalReturned = returns.reduce((s, r) => s + (Number(r.totalAmount) || 0), 0);
 
+      data.openingBalance = newOpening;
       data.totalBill = totalBilled + newOpening;
       data.totalPaid = totalPaid;
-      data.remainingBalance = data.totalBill - totalPaid;
-      delete data.openingBalance;
+      data.remainingBalance = data.totalBill - (totalPaid + totalReturned);
     }
 
     await customer.update(data);
