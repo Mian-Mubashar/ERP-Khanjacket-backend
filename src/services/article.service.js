@@ -9,7 +9,7 @@ class ArticleService {
   static async listArticles({ category, stuff, search, lowStockOnly }) {
     const { Op } = require('sequelize');
     const where = {};
-
+ 
     if (category) {
       where.category = category;
     }
